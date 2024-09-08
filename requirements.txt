@@ -1,0 +1,22 @@
+
+
+# floodlight @ git+https://github.com/mad4ms/floodlight.git
+# sportradar @ git+https://github.com/mad4ms/SportradarAPIs.git
+# bielemetrics_kinexon_api_wrapper @ git+https://github.com/mad4ms/kinexon-api-access-python.git
+pyarrow
+pandas
+numpy
+# pyocclient
+matplotlib
+scikit-learn
+# opencv-python-headless
+shapely
+tqdm
+pytest==8.3.2
+python-dotenv
+pyocclient
+pyarrow
+
+# Local submodules
+-e src/libs_external/api-kinexon
+-e src/libs_external/api-sportradar

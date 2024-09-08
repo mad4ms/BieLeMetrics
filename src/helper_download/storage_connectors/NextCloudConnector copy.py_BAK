@@ -1,0 +1,105 @@
+import owncloud
+import json
+import pandas as pd
+from typing import Union, List
+import os
+
+
+class NextcloudConnector:
+    def __init__(self, credentials: dict):
+        self.client = self._init_owncloud_client(credentials)
+        self.path_base = credentials["PATH_STORAGE_IN_NEXTCLOUD"]
+
+    def _init_owncloud_client(self, credentials: dict) -> owncloud.Client:
+        client = owncloud.Client(credentials["ENDPOINT_STORAGE_NEXTCLOUD"])
+        client.login(
+            credentials["USERNAME_STORAGE_NEXTCLOUD"],
+            credentials["PASSWORD_STORAGE_NEXTCLOUD"],
+        )
+        return client
+
+    def create_folders(self, base_path: str) -> None:
+        """
+        Create necessary folders in Nextcloud if they do not exist.
+        """
+        folder_structure = [
+            "/" + folder for folder in base_path.split("/") if folder
+        ]
+        for folder in folder_structure:
+            try:
+                self.client.mkdir(folder)
+            except owncloud.HTTPResponseError as e:
+                print(f"Failed to create folder {folder}: {e}")
+
+    def download_file_by_game_id(
+        self, game_id: int, extension: str = ".json"
+    ) -> dict:
+        """
+        Download a file from Nextcloud by game ID.
+        """
+        # get a list of all files in the directory
+        files = self.list_files()
+
+        # find the file with the game ID in the name
+        for file in files:
+            if (
+                str(game_id) in file.get_name()
+                and extension in file.get_name()
+            ):
+                # check if file does not exist locally
+                if not file.get_name() in os.listdir():
+                    return self.client.get_file(file.path)
+                else:
+                    if extension == ".json":
+                        with open(file.get_name(), "r", encoding="utf-8") as f:
+                            return json.load(f)
+                    elif extension == ".csv":
+                        return pd.read_csv(file.get_name())
+                    else:
+                        print("Invalid file extension.")
+                        return None
+
+    def upload_file(
+        self, filename: str, data: Union[pd.DataFrame, dict], path: str
+    ) -> None:
+        """
+        Upload a file to Nextcloud.
+        """
+        full_path = f"{path}/{filename}"
+
+        if isinstance(data, pd.DataFrame):
+            data.to_csv(filename, index=False)
+        else:
+            with open(filename, "w") as f:
+                json.dump(data, f)
+
+        self.client.put_file(full_path, filename)
+
+    def list_files(self, depth: int = 5) -> List[owncloud.FileInfo]:
+        """
+        List files in the Nextcloud directory.
+        """
+        return self.client.list(self.path_base, depth=depth)
+
+    def check_file_exists(self, game_id: int) -> bool:
+        """
+        Check if a file with the given game ID exists in the Nextcloud directory.
+        """
+        try:
+            files = self.list_files()
+        except owncloud.HTTPResponseError as e:
+            print(f"Error listing files: {e}")
+            return False
+
+        for file in files:
+            if (
+                file.get_name().endswith(".csv")
+                and str(game_id) in file.get_name()
+            ):
+                print(f"Data for game {game_id} exists. Skipping download...")
+                return True
+
+        print(
+            f"Data for game {game_id} does not exist. Proceeding with download..."
+        )
+        return False
