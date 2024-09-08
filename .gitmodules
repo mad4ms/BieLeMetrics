@@ -1,0 +1,6 @@
+[submodule "src\\libs_external\\api-kinexon"]
+	path = src\\libs_external\\api-kinexon
+	url = https://github.com/mad4ms/kinexon-api-access-python.git
+[submodule ".\\src\\libs_external\\api-sportradar"]
+	path = .\\src\\libs_external\\api-sportradar
+	url = https://github.com/mad4ms/SportradarAPIs.git
