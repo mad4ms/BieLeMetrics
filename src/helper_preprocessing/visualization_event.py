@@ -21,14 +21,6 @@ except ImportError:
     from GameEvent import GameEvent
 
 
-# plot_event_syncing(
-#                 game_event.data_kinexon_event_player_ball,
-#                 game_event.peaks,
-#                 game_event.event_time_throw,
-#                 game_event.name_player,
-#             )
-
-
 def plot_event_syncing(event_game: GameEvent):
     # Plot the distance between the player and the ball
     #  over time with matplotlib, but with original data
