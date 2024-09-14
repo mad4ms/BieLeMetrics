@@ -16,9 +16,12 @@ from matplotlib.patches import Polygon as MplPolygon
 import cv2
 
 try:
-    from .GameEvent import GameEvent
+    from .game_event import GameEvent
 except ImportError:
-    from GameEvent import GameEvent
+    try:
+        from game_event import GameEvent
+    except ImportError:
+        from helper_preprocessing.game_event import GameEvent
 
 
 def plot_event_syncing(event_game: GameEvent):
@@ -137,7 +140,7 @@ def render_event(event_game: GameEvent):
     first_event = False
 
     # group by time in ms
-    df_kinexon_grouped = event_game.data_kinexon_event.groupby("time")
+    df_kinexon_grouped = event_game.df_kinexon_event.groupby("time")
 
     for ts, group in df_kinexon_grouped:
 
@@ -541,6 +544,17 @@ def plot_text(img_draw, event_game: GameEvent):
             img_draw,
             f"Angle Ball <-> Goal: {event_game.angle_ball_goal:.2f} degrees",
             (10, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            1,
+        )
+    # Speed of ball
+    if event_game.speed_ball_at_throw is not None:
+        cv2.putText(
+            img_draw,
+            f"Speed of ball: {event_game.speed_ball_at_throw * 3.6:.2f} km/h or {event_game.speed_ball_at_throw:.2f} m/s",
+            (10, 120),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (255, 255, 255),

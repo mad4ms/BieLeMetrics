@@ -7,6 +7,7 @@ import pandas as pd
 from dotenv import load_dotenv
 import certifi
 import urllib3
+from glob import glob
 from bielemetrics_kinexon_api_wrapper import (
     login,
     fetch_team_ids,
@@ -16,9 +17,14 @@ from bielemetrics_kinexon_api_wrapper import (
 )
 from sportradar import Handball
 
-from storage_connectors.NextCloudConnector import (
-    NextcloudConnector,
-)  # noqa
+try:
+    from storage_connectors.NextCloudConnector import (
+        NextcloudConnector,
+    )  # noqa
+except ImportError:
+    from .storage_connectors.NextCloudConnector import (
+        NextcloudConnector,
+    )
 
 # argsparse
 import argparse
@@ -100,23 +106,41 @@ class GameDataManager:
         )
         self.nc_connector.create_folders(gameday_path)
 
-        self.nc_connector.upload_file(
-            f"{filename_base}_sportradar.json",
-            json_sportradar,
-            f"{gameday_path}/data_sportradar_json",
-            path_local=path_local,
+        path_local_sportradar = (
+            f"{path_local}/gameday_{game_info['gameday']}/sportradar/"
         )
+
+        os.makedirs(path_local_sportradar, exist_ok=True)
+
+        try:
+            self.nc_connector.upload_file(
+                f"{filename_base}_sportradar.json",
+                json_sportradar,
+                f"{gameday_path}/data_sportradar_json",
+                path_local=path_local_sportradar,
+            )
+        except Exception as e:
+            print(f"Failed to upload Sportradar data: {e}")
         # self.nc_connector.upload_file(
         #     f"{filename_base}_sportradar.csv",
         #     df_sportradar,
         #     f"{gameday_path}/data_sportradar_csv",
         # )
-        self.nc_connector.upload_file(
-            f"{filename_base}_kinexon.csv",
-            df_kinexon,
-            f"{gameday_path}/data_kinexon_csv",
-            path_local=path_local,
+        path_local_kinexon = (
+            f"{path_local}/gameday_{game_info['gameday']}/kinexon/"
         )
+
+        os.makedirs(path_local_kinexon, exist_ok=True)
+
+        try:
+            self.nc_connector.upload_file(
+                f"{filename_base}_kinexon.csv",
+                df_kinexon,
+                f"{gameday_path}/data_kinexon_csv",
+                path_local=path_local_kinexon,
+            )
+        except Exception as e:
+            print(f"Failed to upload Kinexon data: {e}")
 
     def _extract_game_info(self, dict_sportradar: Dict) -> Dict[str, str]:
         """
@@ -167,11 +191,16 @@ class GameDataManager:
         """
         Download game data from Kinexon API.
         """
+
         session = login(self.credentials)
         csv_data = fetch_game_csv_data(
             session, self.credentials["ENDPOINT_KINEXON_API"], game_id
         )
         session.close()
+
+        # Convert the CSV data to a DataFrame
+        df_kinexon = pd.read_csv(io.BytesIO(csv_data), delimiter=";")
+        # df_kinexon.to_csv(f"{game_id}_kinexon_debug_save.csv", index=False)
 
         if isinstance(csv_data, bytes):
             return pd.read_csv(io.BytesIO(csv_data), delimiter=";")
@@ -204,16 +233,16 @@ class GameDataManager:
                     .strip()
                     .replace(" ", "")
                 )
-                if (
-                    game["type"] == "Match"
-                    and self.calculate_similarity(team_home, game_team_home)
-                    > 0.8
-                ):
+                similar = self.calculate_similarity(
+                    team_home.lower(), game_team_home.lower()
+                )
+                if similar > 0.6:
                     print(
                         f"[Kinexon] FOUND Kinexon Match: {game['description']}"
                     )
                     return game["session_id"]
 
+        print(f"We have a problem: {team_home} - {date}")
         return None
 
     def download_game_data(
@@ -225,19 +254,49 @@ class GameDataManager:
         """
         Download game data from both Sportradar and Kinexon APIs.
         """
-        json_sportradar = self.download_sportradar_game_data(game_id_str)
+        # find all files recursively in the local storage that end with the "_sportradar.json"
+        list_files_local_sportradar = glob(
+            f"{path_local}/**/*_sportradar.json", recursive=True
+        )
+        list_files_local_kinexon = glob(
+            f"{path_local}/**/*_kinexon.csv", recursive=True
+        )
+
         # make sure to convert the game_id to an integer
         game_id = int(game_id_str.split(":")[-1])
 
+        # check if the game data is already stored locally
+        file_exists_locally = False
+        for file in list_files_local_sportradar:
+            if str(game_id) in file:
+                with open(file, "r", encoding="utf-8") as f:
+                    json_sportradar = json.load(f)
+                file_exists_locally = True
+                print(f"Found local Sportradar data for game {game_id}")
+
+        if not file_exists_locally:
+            json_sportradar = self.download_sportradar_game_data(game_id_str)
+
         kinexon_game_id = self.find_kinexon_game_id(json_sportradar)
-        file_exists = self.check_data_exists(game_id)
-        if kinexon_game_id and not file_exists:
+        file_exists_on_remote_storage = self.check_data_exists(game_id)
+        file_exists_locally = False
+        for file in list_files_local_kinexon:
+            if str(game_id) in file:
+                df_kinexon = pd.read_csv(file)
+                file_exists_locally = True
+
+        if (
+            kinexon_game_id
+            and not file_exists_on_remote_storage
+            and not file_exists_locally
+        ):
             df_kinexon = self.download_kinexon_game_data(kinexon_game_id)
+
             if save_to_storage:
                 self.store_and_upload_game_data(
                     df_kinexon, json_sportradar, path_local=path_local
                 )
-        elif file_exists:
+        elif file_exists_on_remote_storage and not file_exists_locally:
             print(
                 f"Data for game {game_id} exists. Downloading for local usage ..."
             )
@@ -337,6 +396,11 @@ if __name__ == "__main__":
     credentials = load_credentials()
     game_manager = GameDataManager(credentials)
 
+    game_id = "sr:sport_event:42307423"
+    df_kinexon, json_sportradar = game_manager.download_game_data(
+        game_id, True, path_local="./data/raw"
+    )
+
     # # get gameid from args
     # parser = argparse.ArgumentParser()
     # parser.add_argument("game_id", help="game id to download data for")
@@ -351,7 +415,3 @@ if __name__ == "__main__":
     # now use subprocesses to download the data for each game
 
     # game_id = "sr:sport_event:42307421"
-    game_id = "sr:sport_event:42307423"
-    df_kinexon, json_sportradar = game_manager.download_game_data(
-        game_id, True, path_local="./data/raw"
-    )

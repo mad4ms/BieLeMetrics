@@ -72,7 +72,8 @@ class NextcloudConnector:
                     with open(local_file, "r", encoding="utf-8") as f:
                         return json.load(f)
                 elif extension == ".csv":
-                    return pd.read_csv(local_file)
+                    return pd.DataFrame()
+                    # return pd.read_csv(local_file)
                 else:
                     print("Invalid file extension.")
                     return None
