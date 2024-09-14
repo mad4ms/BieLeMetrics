@@ -483,7 +483,7 @@ class GameDataPreprocessing:
                 pass
                 # print(f"Throw point found for event {event_id}.")
                 # plot_event_syncing(game_event)
-            # render_event(game_event)
+            render_event(game_event)
 
             # # process the game event
             # game_event.process_event()
@@ -502,12 +502,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("path_file_sportradar", help="path to sportradar file")
     parser.add_argument("path_file_kinexon", help="path to kinexon file")
-    args = parser.parse_args()
 
-    path_file_kinexon = args.path_file_kinexon
-    path_file_sportradar = args.path_file_sportradar
-    # path_file_sportradar = "./data/raw/gameday_01/sportradar/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_sportradar.json"
-    # path_file_kinexon = "./data/raw/gameday_01/kinexon/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_kinexon.csv"
+    # args = parser.parse_args()
+    # path_file_kinexon = args.path_file_kinexon
+    # path_file_sportradar = args.path_file_sportradar
+
+    path_file_sportradar = "./data/raw/gameday_01/sportradar/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_sportradar.json"
+    path_file_kinexon = "./data/raw/gameday_01/kinexon/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_kinexon.csv"
 
     game_data_preprocessing = GameDataPreprocessing(
         path_file_sportradar, path_file_kinexon

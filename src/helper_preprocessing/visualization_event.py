@@ -14,6 +14,7 @@ from shapely.geometry import Polygon, Point
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon as MplPolygon
 import cv2
+import os
 
 try:
     from .game_event import GameEvent
@@ -129,11 +130,18 @@ def render_event(event_game: GameEvent):
 
     name_event = f"event_{int(event_game.event_id)}"
 
+    # name_event = f"Test"
+
+    # fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    name_file = os.path.join("assets", "events", "videos", f"{name_event}.mp4")
+
     # create a writer with img.shape
     writer = cv2.VideoWriter(
-        f"events\\videos\\{name_event}.mp4",
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        20,
+        name_file,
+        fourcc,
+        30,
         (img.shape[1], img.shape[0]),
     )
 
