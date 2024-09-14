@@ -3,7 +3,7 @@
 
 BieLeMetrics is a Python-based project aimed at processing handball data from Kinexon and Sportradar sources. The project includes downloading, synchronizing, and extracting features from event data to train machine learning models, such as an expected goal model, using the MLJAR platform.
 
-![Demo GIF](./assets\events\videos\demo.gif)
+![Demo GIF](./assets/events/videos/demo.gif)
 
 
 ## Table of Contents
