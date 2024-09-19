@@ -17,12 +17,12 @@ import cv2
 import os
 
 try:
-    from .game_event import GameEvent
-except ImportError:
+    from ..core.game_event import GameEvent
+except ImportError or ModuleNotFoundError:
     try:
-        from game_event import GameEvent
-    except ImportError:
-        from helper_preprocessing.game_event import GameEvent
+        from src.core.game_event import GameEvent
+    except ImportError or ModuleNotFoundError:
+        from src.core.game_event import GameEvent
 
 
 def plot_event_syncing(event_game: GameEvent):

@@ -4,6 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from download_game_by_id import download_game
+from dotenv import load_dotenv
 
 
 # Function to load the CSV data
@@ -31,6 +32,7 @@ def download_game_threaded(game_id):
         ps1_content = f"""
         conda activate env_github_bielemetrics
         python src/download_game_by_id.py {game_id}
+        Start-Sleep -Seconds 5
         exit
         """
 
@@ -99,5 +101,6 @@ def run_parallel_downloads_by_gameday(file_path):
 
 
 if __name__ == "__main__":
+    load_dotenv()
     file_path = "./games_23-24.csv"  # Path to your CSV file
     run_parallel_downloads_by_gameday(file_path)

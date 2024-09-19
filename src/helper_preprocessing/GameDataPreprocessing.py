@@ -194,7 +194,8 @@ class GameDataPreprocessing:
                 continue
 
             if dict_event["competitor"] == "home" and dict_event["match_time"] <= 30:
-                list_goalkeeper_home_ids.append(dict_event["id_goalkeeper"])
+                if dict_event["id_goalkeeper"] not in list_goalkeeper_home_ids and dict_event["id_goalkeeper"] is not None:
+                    list_goalkeeper_home_ids.append(dict_event["id_goalkeeper"])
 
         # Iterate over the event ids and read the kinexon data
         for event_id, dict_event in self.dict_event_id_kinexon_path.items():
@@ -218,15 +219,15 @@ class GameDataPreprocessing:
                 df_kinexon_event["league_id"] == dict_event["id_goalkeeper"]
             ].copy()
             # Check if the goalkeeper data is available
-            if len(df_goalkeeper) == 0:
+            if df_goalkeeper.empty:
                 # print(f"! Goalkeeper data for {event_id} not found.")
                 continue
 
             # get the last position of the goalkeeper
             last_goalkeeper_position = df_goalkeeper.iloc[-1]
-
-            # Append the goalkeeper position to the list
-            list_goalkeeper_positions_home.append(last_goalkeeper_position["pos_x"])
+            if df_goalkeeper["league_id"].values[0] in list_goalkeeper_home_ids and dict_event["match_time"] <= 30:
+                # Append the goalkeeper position to the list
+                list_goalkeeper_positions_home.append(last_goalkeeper_position["pos_x"])
 
         # Determine the attack direction based on the
         # goalkeeper positions in the first half
@@ -483,7 +484,9 @@ class GameDataPreprocessing:
                 pass
                 # print(f"Throw point found for event {event_id}.")
                 # plot_event_syncing(game_event)
-            render_event(game_event)
+            # check if player distance goal is > 20
+            # if game_event.distance_player_goal is not None and game_event.distance_player_goal > 20:
+            #     render_event(game_event)
 
             # # process the game event
             # game_event.process_event()
@@ -491,6 +494,15 @@ class GameDataPreprocessing:
             # game_event.save_event(
             #     directory=f"./data/events/match_{self.match_id}"
 
+        # filter df_result for relevant event types
+        relevant_event_types = [
+            "score_change",
+            "shot_off_target",
+            "shot_blocked",
+            "shot_saved",
+            "seven_m_missed",
+        ]
+        df_result = df_result[df_result["event_type"].isin(relevant_event_types)]
 
         # create dir of path_file_result
         os.makedirs(os.path.dirname(self.path_file_result), exist_ok=True)

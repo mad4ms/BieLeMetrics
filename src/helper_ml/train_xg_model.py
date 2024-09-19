@@ -33,7 +33,6 @@ dfs = {file: pd.read_csv(file) for file in list_files}
 features = [
     "distance_player_goal",  # distance between player and the goal
     "distance_player_goalkeeper",  # distance between player and goalkeeper
-    "distance_player_blocker",  # distance between player and blocker
     "distance_goalkeeper_goal",  # distance between goalkeeper and goal
     "angle_ball_goal",  # angle of the ball relative to the goal
     "speed_ball_at_throw",  # speed of the ball when thrown
@@ -45,6 +44,34 @@ target_column = "event_type"  # target column to predict
 
 # Combine all DataFrames into a single DataFrame
 df = pd.concat(dfs.values(), ignore_index=True)
+
+# Filter for relevant events
+relevant_event_types = [
+    "score_change",
+    "shot_off_target",
+    "shot_blocked",
+    "shot_saved",
+    "seven_m_missed",
+]
+
+df = df[df["event_type"].isin(relevant_event_types)]
+
+# drop nan values
+df = df.dropna(subset=features + [target_column])
+
+# print length
+print(f"0. Length of DataFrame: {len(df)}")
+
+# "distance_player_goal" must be < 20m
+df = df[df["distance_player_goal"] < 20]
+
+print(f"1. Length of DataFrame: {len(df)}")
+
+# "distance_goalkeeper_goal" must be < 20m
+df = df[df["distance_goalkeeper_goal"] < 20]
+
+# print length
+print(f"2. Length of DataFrame after filtering: {len(df)}")
 
 # Select the features and target column
 X = df[features]
@@ -59,6 +86,9 @@ print(y.value_counts())
 sampling_strategy = 1
 rus = RandomUnderSampler(sampling_strategy=sampling_strategy)
 X_res, y_res = rus.fit_resample(X, y)
+
+X_res = X
+y_res = y
 
 # print distribution of target column
 print(y_res.value_counts())
@@ -81,7 +111,7 @@ path_out = "./data/ml_stuff/automl_1"
 
 automl = AutoML(
     results_path=path_out,
-    algorithms=["CatBoost"],
+    algorithms=["Xgboost"],
     total_time_limit=5 * 60,
     n_jobs=6,
     explain_level=2,

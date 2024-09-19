@@ -262,6 +262,8 @@ class GameDataManager:
             f"{path_local}/**/*_kinexon.csv", recursive=True
         )
 
+        load_dotenv()
+
         # make sure to convert the game_id to an integer
         game_id = int(game_id_str.split(":")[-1])
 

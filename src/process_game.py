@@ -34,8 +34,8 @@ def main():
     path_file_kinexon = args.path_file_kinexon
     path_file_sportradar = args.path_file_sportradar
 
-    # path_file_sportradar = "./data/raw/2023-08-24_gd_01_id_42307421_HCErlangen_vs_TSVHannover-Burgdorf_sportradar.json"
-    # path_file_kinexon = "./data/raw/2023-08-24_gd_01_id_42307421_HCErlangen_vs_TSVHannover-Burgdorf_kinexon.csv"
+    # path_file_sportradar = "data/raw/gameday_01/sportradar/2023-08-28_gd_01_id_42307435_teams_SCDHfKLeipzig_vs_FuchseBerlin_sportradar.json"
+    # path_file_kinexon = "data/raw/gameday_01/kinexon/2023-08-28_gd_01_id_42307435_teams_SCDHfKLeipzig_vs_FuchseBerlin_kinexon.csv"
 
     process_game(
         path_file_sportradar,
