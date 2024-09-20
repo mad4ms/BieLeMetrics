@@ -29,15 +29,37 @@ dfs = {file: pd.read_csv(file) for file in list_files}
 #     print(f"\n{file}")
 #     print(df.head())
 
+# return {
+#     "distance_player_to_goal": self.distance_player_to_goal,
+#     "distance_player_to_goalkeeper": self.distance_player_to_goalkeeper,
+#     "distance_player_to_blocker": self.distance_player_to_blocker,
+#     "distance_player_to_nearst_opponent": self.distance_player_to_nearst_opponent,
+#     "id_nearst_opponent": self.id_nearst_opponent,
+#     "distance_player_to_nearest_teammate": self.distance_player_to_nearest_teammate,
+#     "id_nearest_teammate": self.id_nearest_teammate,
+#     "distance_goalkeeper_to_goal": self.distance_goalkeeper_to_goal,
+#     "angle_player_to_goal": self.angle_player_to_goal,
+#     "angle_ball_to_goal": self.angle_ball_to_goal,
+#     "num_opponents_between_player_and_goal": self.num_opponents_between_player_and_goal,
+#     "num_opponents_close_to_player": self.num_opponents_close_to_player,
+#     "home_advantage": self.home_advantage,
+#     "speed_player": self.speed_player,
+#     "speed_ball": self.speed_ball,
+# }
+
 
 features = [
-    "distance_player_goal",  # distance between player and the goal
-    "distance_player_goalkeeper",  # distance between player and goalkeeper
-    "distance_goalkeeper_goal",  # distance between goalkeeper and goal
-    "angle_ball_goal",  # angle of the ball relative to the goal
-    "speed_ball_at_throw",  # speed of the ball when thrown
-    "distance_nearest_defender",  # distance to the nearest defender
-    "number_defenders_close",  # number of defenders close to the player
+    "distance_player_to_goal",  # distance between player and the goal
+    "distance_player_to_goalkeeper",  # distance between player and goalkeeper
+    "distance_goalkeeper_to_goal",  # distance between goalkeeper and goal
+    "angle_player_to_goal",  # angle of the ball relative to the goal
+    "angle_ball_to_goal",
+    "speed_ball",  # speed of the ball when thrown
+    "speed_player",  # speed of the player
+    "distance_player_to_nearst_opponent",  # distance to the nearest defender
+    "distance_player_to_nearest_teammate",  # number of defenders close to the player
+    # "num_opponents_between_player_and_goal",  # number of defenders between player and goal
+    "num_opponents_close_to_player",  # number of defenders close to the player
 ]
 
 target_column = "event_type"  # target column to predict
@@ -63,12 +85,12 @@ df = df.dropna(subset=features + [target_column])
 print(f"0. Length of DataFrame: {len(df)}")
 
 # "distance_player_goal" must be < 20m
-df = df[df["distance_player_goal"] < 20]
+df = df[df["distance_player_to_goal"] < 20]
 
 print(f"1. Length of DataFrame: {len(df)}")
 
 # "distance_goalkeeper_goal" must be < 20m
-df = df[df["distance_goalkeeper_goal"] < 20]
+df = df[df["distance_goalkeeper_to_goal"] < 20]
 
 # print length
 print(f"2. Length of DataFrame after filtering: {len(df)}")

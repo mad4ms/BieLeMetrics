@@ -1,4 +1,4 @@
-from helper_preprocessing.GameDataPreprocessing import GameDataPreprocessing
+from processing.game_processing import GameProcessing
 import argparse
 
 # example is:
@@ -16,12 +16,9 @@ def process_game(path_file_sportradar: str, path_file_kinexon: str) -> None:
     """
     Process a game by cleaning and extracting data.
     """
-    game_data_preprocessing = GameDataPreprocessing(
+    game_data_preprocessing = GameProcessing(
         path_file_sportradar, path_file_kinexon
     )
-    game_data_preprocessing.clean_game_data()
-    game_data_preprocessing.create_kinexon_snippets_from_events()
-    game_data_preprocessing.process_game_events()
 
 
 def main():
