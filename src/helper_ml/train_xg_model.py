@@ -109,8 +109,8 @@ sampling_strategy = 1
 rus = RandomUnderSampler(sampling_strategy=sampling_strategy)
 X_res, y_res = rus.fit_resample(X, y)
 
-X_res = X
-y_res = y
+# X_res = X
+# y_res = y
 
 # print distribution of target column
 print(y_res.value_counts())
@@ -124,7 +124,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # potential output: ./data/processed/automl_1
-path_out = "./data/ml_stuff/automl_1"
+path_out = "./data/ml_stuff/automl_2"
 # check if exists, else increase the number
 # if os.path.exists(path_out):
 #     number = path_out.split("_")[-1]
@@ -133,9 +133,17 @@ path_out = "./data/ml_stuff/automl_1"
 
 automl = AutoML(
     results_path=path_out,
-    algorithms=["Xgboost"],
+    algorithms=[
+        # "Baseline",
+        # "Linear",
+        # "Xgboost",
+        # "CatBoost",
+        # "LightGBM",
+        # "Random Forest",
+        "Neural Network",
+    ],
     total_time_limit=5 * 60,
-    n_jobs=6,
+    # n_jobs=6,
     explain_level=2,
     mode="Explain",
     random_state=42,

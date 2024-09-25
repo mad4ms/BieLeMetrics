@@ -102,7 +102,12 @@ def calc_attack_direction(dict_event_id_kinexon_path: dict) -> None:
 
     # First, determine the goalkeeper IDs for the home team
     for event_id, dict_event in dict_event_id_kinexon_path.items():
-        if "id_goalkeeper" not in dict_event or "competitor" not in dict_event:
+        if (
+            "id_goalkeeper" not in dict_event
+            or "competitor" not in dict_event
+            or not "match_time" in dict_event
+        ):
+            # remove events without goalkeeper or competitor from the list
             continue
         if (
             dict_event["competitor"] == "home"
@@ -126,6 +131,11 @@ def calc_attack_direction(dict_event_id_kinexon_path: dict) -> None:
             continue
 
         df_kinexon_event = pd.read_csv(kin_event_for_sportradar_event[0])
+
+        # convert df_kinexon_event["league_id"] to string
+        df_kinexon_event["league_id"] = df_kinexon_event["league_id"].astype(
+            str
+        )
 
         df_goalkeeper = df_kinexon_event[
             df_kinexon_event["league_id"] == dict_event["id_goalkeeper"]

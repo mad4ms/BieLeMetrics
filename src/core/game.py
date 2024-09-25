@@ -44,6 +44,8 @@ class Game:
 
         # Create event-specific Kinexon snippets
         self.dict_kinexon_path_by_event_id = {}
+        self.check_game_data()
+        self.filter_invalid_events()
         self.create_kinexon_snippets_from_events()
         # with kinexon snippets, add additional event data
         self.process_additional_event_data()
@@ -113,6 +115,71 @@ class Game:
         # Sportradar data does not require cleaning at this point
         return df_kinexon_cleaned, self.dict_sportradar
 
+    def filter_invalid_events(self) -> None:
+        list_events_to_remove = []
+
+        for dict_event in self.dict_sportradar["timeline"]:
+            event_id = dict_event["id"]
+
+            if (
+                # "id_goalkeeper" not in dict_event
+                "competitor" not in dict_event
+                or not "match_time" in dict_event
+            ):
+                # remove events without goalkeeper or competitor from the list
+                list_events_to_remove.append(dict_event)
+                continue
+
+        for event_id in list_events_to_remove:
+            self.dict_sportradar["timeline"] = [
+                dict_event
+                for dict_event in self.dict_sportradar["timeline"]
+                if dict_event["id"] != event_id
+            ]
+
+    def check_game_data(self) -> None:
+        event_match_start = None
+        event_match_end = None
+        for dict_event in self.dict_sportradar["timeline"]:
+            # First get the match start and end event
+            event_type = dict_event["type"]
+            if event_type == "match_started":
+                event_match_start = dict_event
+            elif event_type == "match_ended":
+                event_match_end = dict_event
+
+        if not event_match_start or not event_match_end:
+            print("Match start or end event not found.")
+            return
+
+        # prnt first raw time and last raw time
+        print(
+            f"First raw time: {self.df_kinexon['time'].iloc[0]} and last raw time: {self.df_kinexon['time'].iloc[-1]}"
+        )
+        # the first entry of the kinexon data should align with the match start event
+        kinexon_start_time = pd.to_datetime(
+            self.df_kinexon["time"].iloc[0], dayfirst=True
+        )
+        # the last entry of the kinexon data should align with the match end event
+        kinexon_end_time = pd.to_datetime(
+            self.df_kinexon["time"].iloc[-1], dayfirst=True
+        )
+
+        difference_match_start = kinexon_start_time - pd.to_datetime(
+            event_match_start["time"]
+        ).replace(tzinfo=None)
+        difference_match_end = kinexon_end_time - pd.to_datetime(
+            event_match_end["time"]
+        ).replace(tzinfo=None)
+
+        print(
+            f"Difference between match start and kinexon start: {difference_match_start} with kinexon time: {kinexon_start_time} and event time: {pd.to_datetime(event_match_start['time']).replace(tzinfo=None)}"
+        )
+        print(
+            f"Difference between match end and kinexon end: {difference_match_end} with kinexon time: {kinexon_end_time} and event time: {pd.to_datetime(event_match_end['time']).replace(tzinfo=None)}"
+        )
+        pass
+
     def create_kinexon_snippets_from_events(self) -> None:
         """
         Create event-specific Kinexon snippets and save them to CSV files.
@@ -130,6 +197,9 @@ class Game:
                     dict_event  # Update the dictionary
                 )
                 continue
+
+            # Check
+
             # Extract the event time and create a 15-second window
             event_time_tagged = pd.to_datetime(dict_event.get("time")).replace(
                 tzinfo=None
@@ -137,7 +207,9 @@ class Game:
             # Start 15 seconds before the event
             event_time_start = event_time_tagged - pd.Timedelta(seconds=15)
             # Convert Kinexon timestamps to datetime objects
-            self.df_kinexon["time"] = pd.to_datetime(self.df_kinexon["time"])
+            self.df_kinexon["time"] = pd.to_datetime(
+                self.df_kinexon["time"], dayfirst=True
+            )
 
             # Find the closest timestamps in the Kinexon data
             idx_start = (
@@ -146,12 +218,13 @@ class Game:
             idx_tagged = (
                 (self.df_kinexon["time"] - event_time_tagged).abs().idxmin()
             )
-
             # Extract the Kinexon data for the event and save to CSV
             data_kinexon = self.df_kinexon.loc[idx_start:idx_tagged]
-            if not data_kinexon.empty:
+            if not data_kinexon.empty or len(data_kinexon) > 1:
                 data_kinexon.to_csv(path_event, index=False)
                 dict_event["path_kinexon"] = path_event
+            else:
+                print(f"\t>>> No snippet data found for event {event_id}.")
 
             # Update the event-to-Kinexon path dictionary
             self.dict_kinexon_path_by_event_id[event_id] = dict_event

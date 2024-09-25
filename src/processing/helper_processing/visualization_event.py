@@ -15,6 +15,10 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon as MplPolygon
 import cv2
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
+
 
 try:
     from ..core.game_event import GameEvent
@@ -25,79 +29,348 @@ except ImportError or ModuleNotFoundError:
         from src.core.game_event import GameEvent
 
 
+# def plot_event_syncing(event_game: GameEvent):
+#     # Plot the distance between the player and the ball
+#     #  over time with matplotlib, but with original data
+
+#     # check if "data_kinexon_event_player_ball" is in event_game
+#     if "data_kinexon_event_player_ball" not in event_game.__dict__:
+#         return
+#     df_player_ball = event_game.data_kinexon_event_player_ball
+#     ## shift acceleration by 3 capture the throw
+#     # df_player_ball["acceleration"] = df_player_ball["acceleration"].shift(
+#     #     -3
+#     # )
+
+#     if event_game.event_time_throw is None:
+#         return
+#     if event_game.attack_direction not in ["left", "right"]:
+#         print(f"! Attack direction is not set for event {event_game.event_id}")
+#         return
+
+#     # get the goal position
+#     goal_position = (
+#         (40, 10) if event_game.attack_direction == "left" else (0, 10)
+#     )
+
+#     plt.figure()
+#     plt.plot(df_player_ball["time"], df_player_ball["acceleration"], color="b")
+#     # plot distance on other y axis
+#     plt.twinx()
+#     plt.plot(df_player_ball["time"], df_player_ball["distance"], color="r")
+#     plt.plot(
+#         df_player_ball["time"], df_player_ball["distance_ball_goal"], color="y"
+#     )
+
+#     # Gray area for distance < 2.5 m
+#     plt.fill_between(
+#         df_player_ball["time"],
+#         0,
+#         25,
+#         where=df_player_ball["distance"] < 2.5,
+#         color="gray",
+#         alpha=0.2,
+#     )
+#     time_last_in_df = df_player_ball["time"].iloc[-1]
+
+#     # Light read area for 1.5 seconds before time last in df
+#     plt.fill_between(
+#         df_player_ball["time"],
+#         0,
+#         25,
+#         where=(
+#             df_player_ball["time"]
+#             > time_last_in_df - pd.Timedelta(1.5, unit="s")
+#         ),
+#         color="red",
+#         alpha=0.2,
+#     )
+
+#     # Gray area for direction of ball
+#     # plt.fill_between(
+#     #     df_player_ball["ts in ms"],
+#     #     0,
+#     #     25,
+#     #     where=df_player_ball["direction"] == 1,
+#     #     color="green",
+#     #     alpha=0.2,
+#     # )
+
+#     if event_game.event_time_throw is not None:
+#         # Add a vertical line for the throw
+#         plt.axvline(x=event_game.event_time_throw, color="r", linestyle="--")
+
+#     # Plot peaks
+#     for peak in event_game.peaks:
+#         plt.axvline(
+#             x=df_player_ball["time"].iloc[peak], color="g", linestyle="--"
+#         )
+#     if len(event_game.peaks) > 0:
+#         # Highlight the last peak
+#         plt.axvline(
+#             x=df_player_ball["time"].iloc[event_game.peaks[-1]],
+#             color="r",
+#             linestyle="--",
+#             label="Last peak",
+#         )
+
+#     plt.xlabel("Time in ms")
+#     plt.ylabel("Distance in m")
+#     plt.title(f"Distance between player and ball for {event_game.name_player}")
+#     plt.show(block=True)
+
+
 def plot_event_syncing(event_game: GameEvent):
-    # Plot the distance between the player and the ball
-    #  over time with matplotlib, but with original data
+    # Plot the distance between the player and the ball over time
+    if "data_kinexon_event_player_ball" not in event_game.__dict__:
+        return
     df_player_ball = event_game.data_kinexon_event_player_ball
-    ## shift acceleration by 3 capture the throw
-    # df_player_ball["acceleration"] = df_player_ball["acceleration"].shift(
-    #     -3
-    # )
 
     if event_game.event_time_throw is None:
         return
+    if event_game.attack_direction not in ["left", "right"]:
+        print(f"! Attack direction is not set for event {event_game.event_id}")
+        return
 
-    plt.figure()
-    plt.plot(df_player_ball["time"], df_player_ball["acceleration"], color="b")
-    # plot distance on other y axis
-    plt.twinx()
-    plt.plot(df_player_ball["time"], df_player_ball["distance"], color="r")
-    # Gray area for distance < 2.5 m
-    plt.fill_between(
+    # Get the goal position
+    goal_position = (
+        (40, 10) if event_game.attack_direction == "left" else (0, 10)
+    )
+
+    # First plot: Time-based data
+    fig, ax1 = plt.subplots(figsize=(15, 10))
+
+    # Plot acceleration on the left y-axis
+    ax1.plot(
         df_player_ball["time"],
-        0,
-        25,
+        df_player_ball["acceleration"],
+        color="b",
+        label="Acceleration (m/s²)",
+    )
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Acceleration (m/s²)", color="b")
+    ax1.tick_params(axis="y", labelcolor="b")
+
+    # ax1.plot(
+    #     df_player_ball["time"],
+    #     df_player_ball["speed"],
+    #     color="b",
+    #     label="Speed (m/s)",
+    # )
+    # ax1.set_xlabel("Time")
+    # ax1.set_ylabel("Speed (m/s)", color="b")
+    # ax1.tick_params(axis="y", labelcolor="b")
+
+    # Create a second y-axis to plot the distances
+    ax2 = ax1.twinx()
+    ax2.plot(
+        df_player_ball["time"],
+        df_player_ball["distance"],
+        color="r",
+        label="Player-Ball Distance (m)",
+    )
+    ax2.plot(
+        df_player_ball["time"],
+        df_player_ball["smoothed_distance_ball_goal"],
+        color="y",
+        label="Ball-Goal Distance (m)",
+    )
+    ax2.set_ylabel("Distance (m)", color="r")
+    ax2.tick_params(axis="y", labelcolor="r")
+
+    # Stretch fill_between over the entire y-axis range
+    ax1.fill_between(
+        df_player_ball["time"],
+        ax1.get_ylim()[0],
+        ax1.get_ylim()[1],
         where=df_player_ball["distance"] < 2.5,
         color="gray",
         alpha=0.2,
+        label="Distance < 2.5m",
     )
-    time_last_in_df = df_player_ball["time"].iloc[-1]
 
-    # Light read area for 1.5 seconds before time last in df
-    plt.fill_between(
+    time_last_in_df = df_player_ball["time"].iloc[-1]
+    ax1.fill_between(
         df_player_ball["time"],
-        0,
-        25,
+        ax1.get_ylim()[0],
+        ax1.get_ylim()[1],
         where=(
             df_player_ball["time"]
             > time_last_in_df - pd.Timedelta(1.5, unit="s")
         ),
         color="red",
         alpha=0.2,
+        label="Last 1.5 seconds",
     )
 
-    # Gray area for direction of ball
-    # plt.fill_between(
-    #     df_player_ball["ts in ms"],
-    #     0,
-    #     25,
-    #     where=df_player_ball["direction"] == 1,
-    #     color="green",
-    #     alpha=0.2,
-    # )
-
-    if event_game.event_time_throw is not None:
-        # Add a vertical line for the throw
-        plt.axvline(x=event_game.event_time_throw, color="r", linestyle="--")
-
-    # Plot peaks
+    # Add event throw line and detected peaks
     for peak in event_game.peaks:
-        plt.axvline(
-            x=df_player_ball["time"].iloc[peak], color="g", linestyle="--"
+        ax1.axvline(
+            x=df_player_ball["time"].iloc[peak],
+            color="g",
+            linestyle="--",
+            label="Detected Peak",
         )
     if len(event_game.peaks) > 0:
-        # Highlight the last peak
-        plt.axvline(
+        ax1.axvline(
             x=df_player_ball["time"].iloc[event_game.peaks[-1]],
             color="r",
             linestyle="--",
-            label="Last peak",
+            label="Last Peak",
         )
 
-    plt.xlabel("Time in ms")
-    plt.ylabel("Distance in m")
-    plt.title(f"Distance between player and ball for {event_game.name_player}")
-    plt.show(block=True)
+    # Set the title
+    plt.title(f"Player-Ball Interaction for {event_game.name_player}")
+
+    # Plot is_direction_on_goal on the same plot
+    ax3 = (
+        ax1.twinx()
+    )  # Create another twin axis for plotting is_direction_on_goal
+    ax3.spines["right"].set_position(
+        ("outward", 60)
+    )  # Offset the third y-axis
+    ax3.fill_between(
+        df_player_ball["time"],
+        0,
+        1,
+        where=df_player_ball["ball_moving_towards_goal_x"] == 1,
+        color="purple",
+        alpha=0.2,
+        label="Is Direction on Goal",
+    )
+    ax3.set_ylabel("Is Direction on Goal (0 or 1)", color="purple")
+    ax3.tick_params(axis="y", labelcolor="purple")
+
+    # Create a combined legend from both axes without duplicates
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    lines_3, labels_3 = ax3.get_legend_handles_labels()
+
+    # Merge legends and remove duplicates
+    unique_legend = dict(
+        zip(labels_1 + labels_2 + labels_3, lines_1 + lines_2 + lines_3)
+    )
+
+    # Set the legend outside the plot
+    ax1.legend(
+        unique_legend.values(),
+        unique_legend.keys(),
+        loc="upper left",
+    )
+
+    # Adjust the layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show(block=False)
+
+    plt.figure(figsize=(15, 10))
+
+    # Second plot: Visualizing the situation on the field
+    img_name = "./assets/handballfeld.png"
+    img = cv2.imread(img_name)
+    if img is None:
+        img = cv2.imread("../" + img_name)
+
+    scale = img.shape[1] / 40  # Assuming the image width represents 40 meters
+    plt.imshow(img, extent=[0, 40, 0, 20])
+
+    # Plot thrower, ball, goalkeeper positions
+    throw_player_x = event_game.throw_player_pos_x
+    throw_player_y = event_game.throw_player_pos_y
+    ball_x = event_game.throw_ball_pos_x
+    ball_y = event_game.throw_ball_pos_y
+    goalkeeper_x = event_game.pos_x_goalkeeper
+    goalkeeper_y = event_game.pos_y_goalkeeper
+
+    plt.scatter(
+        [throw_player_x],
+        [throw_player_y],
+        color="blue",
+        label="Thrower",
+        s=100,
+    )
+    plt.scatter([ball_x], [ball_y], color="red", label="Ball", s=100)
+    plt.scatter(
+        [goalkeeper_x],
+        [goalkeeper_y],
+        color="green",
+        label="Goalkeeper",
+        s=100,
+    )
+
+    # Draw lines to the goal
+    plt.plot(
+        [ball_x, goal_position[0]],
+        [ball_y, goal_position[1]],
+        color="orange",
+        label="Ball -> Goal",
+    )
+    plt.plot(
+        [throw_player_x, ball_x],
+        [throw_player_y, ball_y],
+        color="purple",
+        label="Thrower -> Ball",
+    )
+
+    # Define the angle boundaries for "on goal" direction (-30° to 30° relative to the center of the goal)
+    min_angle = -30
+    max_angle = 30
+
+    # Calculate the angle boundaries relative to the goal position (with 0° pointing towards the center of the goal)
+    direction_to_goal = np.arctan2(
+        goal_position[1] - ball_y, goal_position[0] - ball_x
+    )
+
+    min_angle_radians = np.radians(min_angle) + direction_to_goal
+    max_angle_radians = np.radians(max_angle) + direction_to_goal
+
+    # Calculate the coordinates for the min and max angle lines relative to the goal position
+    line_length = 10  # Length of the lines to be drawn (adjust as necessary)
+    min_angle_x = ball_x + line_length * np.cos(min_angle_radians)
+    min_angle_y = ball_y + line_length * np.sin(min_angle_radians)
+    max_angle_x = ball_x + line_length * np.cos(max_angle_radians)
+    max_angle_y = ball_y + line_length * np.sin(max_angle_radians)
+
+    # Plot the ball position
+    plt.scatter(ball_x, ball_y, color="blue", label="Ball Position")
+
+    # Draw lines to represent the angle range
+    plt.plot(
+        [ball_x, min_angle_x],
+        [ball_y, min_angle_y],
+        color="green",
+        linestyle="--",
+        label="Min Angle (-30°)",
+    )
+    plt.plot(
+        [ball_x, max_angle_x],
+        [ball_y, max_angle_y],
+        color="red",
+        linestyle="--",
+        label="Max Angle (30°)",
+    )
+
+    # Fill the area between these two lines to represent the on-goal direction
+    plt.fill(
+        [ball_x, min_angle_x, max_angle_x],
+        [ball_y, min_angle_y, max_angle_y],
+        color="yellow",
+        alpha=0.2,
+        label="On Goal Direction Range",
+    )
+
+    # Plot the actual direction from the ball to the goal as a reference
+    plt.plot(
+        [ball_x, goal_position[0]],
+        [ball_y, goal_position[1]],
+        color="orange",
+        label="Ball -> Goal",
+    )
+
+    plt.xlim(0, 40)
+    plt.ylim(0, 20)
+    plt.title(f"Field situation for {event_game.name_player}")
+    plt.legend(loc="upper right")
+    plt.show()
 
 
 def render_event(event_game: GameEvent):
@@ -177,6 +450,10 @@ def render_event(event_game: GameEvent):
         # Check if row_sportradar["id_player"] is nan
         if pd.isna(event_game.id_player):
             continue
+
+        if event_game.dict_features is not None:
+            # merge the dict_features in event_game
+            event_game.__dict__.update(event_game.dict_features)
 
         # Iterate over the grouped dataframe
         for index, row in group.iterrows():

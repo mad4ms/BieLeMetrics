@@ -1,4 +1,9 @@
-from processing.game_processing import GameProcessing
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
+from src.processing.game_processor import GameProcessor
 import argparse
 
 # example is:
@@ -16,7 +21,7 @@ def process_game(path_file_sportradar: str, path_file_kinexon: str) -> None:
     """
     Process a game by cleaning and extracting data.
     """
-    game_data_preprocessing = GameProcessing(
+    game_data_preprocessing = GameProcessor(
         path_file_sportradar, path_file_kinexon
     )
 

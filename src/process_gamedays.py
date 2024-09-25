@@ -5,20 +5,50 @@ import re
 from collections import defaultdict
 import platform
 
+
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 # Import the process_game function
-from process_game import process_game
+from src.process_game import process_game
+
+DEBUG_MODE = False
+id_game = ""
+
+START_AFTER_MODE = False
+START_AFTER_ID = ""
 
 
 # Function to process a single game sequentially
 def process_game_sequential(path_file_sportradar: str, path_file_kinexon: str):
     """Process a single game using the process_game script."""
-    try:
-        process_game(path_file_sportradar, path_file_kinexon)
+
+    global START_AFTER_MODE  # Declare that you are using the global variable
+
+    if DEBUG_MODE:
+        if not id_game in path_file_sportradar:
+            print(
+                f"Skip game with Sportradar: {path_file_sportradar} and Kinexon: {path_file_kinexon}"
+            )
+            return
         print(
-            f"Processed game with Sportradar: {path_file_sportradar} and Kinexon: {path_file_kinexon}"
+            f"Processing game with Sportradar: {path_file_sportradar} and Kinexon: {path_file_kinexon}"
         )
-    except Exception as e:
-        print(f"Failed to process game: {e}")
+
+    if START_AFTER_MODE:
+        if not START_AFTER_ID in path_file_sportradar:
+            return
+        else:
+            START_AFTER_MODE = False
+
+    process_game(path_file_sportradar, path_file_kinexon)
+    print(
+        f"Processed game with Sportradar: {path_file_sportradar} and Kinexon: {path_file_kinexon}"
+    )
+    # except Exception as e:
+    #     print(f"Failed to process game: {e}")
 
 
 # Function to process all games for a specific game day sequentially

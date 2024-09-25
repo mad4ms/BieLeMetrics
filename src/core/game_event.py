@@ -6,9 +6,11 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
 from src.core.game_event_features import GameEventFeatures
-from src.processing.helper_processing.helper_find_throw_point import (
-    find_timestamp_of_throw,
+from src.processing.helper_processing.helper_game_throw_detector import (
+    ThrowEventDetector,
 )
+
+import time
 
 
 class GameEvent:
@@ -63,8 +65,14 @@ class GameEvent:
 
         # print known metadata
         print(
-            f"Event type: {self.event_type} - Score: {self.home_score}-{self.away_score} - Event time: {self.event_time_tagged} - Player: {self.name_player} (Team: {self.name_team_attack}) - Goalkeeper: {self.name_goalkeeper} (Team: {self.name_team_defense})"
+            f"> New event {self.event_id} type: {self.event_type} - Score: {self.home_score}-{self.away_score} - Event time: {self.event_time_tagged} - Player: {self.name_player} (Team: {self.name_team_attack}) - Goalkeeper: {self.name_goalkeeper} (Team: {self.name_team_defense})"
         )
+        print(
+            f"\t> Length positional data: {len(self.df_kinexon_event)} in file: {self.path_to_kinexon_scene}"
+        )
+
+        # Check metadata
+        self._check_meta_data()
 
         # process
         self._process_event()
@@ -83,29 +91,37 @@ class GameEvent:
 
         if self.event_type not in relevant_event_types:
             return
-
-        # check difference of event time and kinexon time
-        diff_first_entry = (
-            pd.to_datetime(self.df_kinexon_event["time"].iloc[0])
-            - self.event_time_start
+        # Initialize the throw detector
+        throw_detector = ThrowEventDetector(
+            self.event_type,
+            self.df_kinexon_event,
+            self.id_player,
+            self.attack_direction,
         )
-
-        if (
-            diff_first_entry.total_seconds() > 15
-            or diff_first_entry.total_seconds() < -15
-        ):
-            print(
-                f"Event ID: {self.event_id} - Event time: {self.event_time_start} - Kinexon time: {self.df_kinexon_event['time'].iloc[0]} - Difference: {diff_first_entry.total_seconds()} seconds"
-            )
-            pass
-
-        # Find the throw point
+        # Find the throw timestamp
         (
             self.event_time_throw,
             self.data_kinexon_event_player_ball,
             self.peaks,
-        ) = find_timestamp_of_throw(
-            self.event_type, self.df_kinexon_event, self.id_player
+        ) = throw_detector.find_throw_timestamp()
+
+        # check if throw point is found and in the kinexon evnet data
+        if self.event_time_throw is not None:
+            diff_throw = self.event_time_throw - self.event_time_start
+            if (
+                diff_throw.total_seconds() > 15
+                or diff_throw.total_seconds() < -15
+            ):
+                print(
+                    f"\t> Throw time check: {self.event_time_throw} - Event time: {self.event_time_start} - Difference: {diff_throw.total_seconds()} s ❌"
+                )
+            else:
+                print(
+                    f"\t> Throw time check: {self.event_time_throw} - Event time: {self.event_time_start} - Difference: {diff_throw.total_seconds()} s ✅"
+                )
+
+        self.df_kinexon_event["time"] = pd.to_datetime(
+            self.df_kinexon_event["time"]
         )
 
         # Extract throw moment
@@ -328,13 +344,19 @@ class GameEvent:
 
     def _check_meta_data(self) -> None:
         """Check if the metadata is correct."""
-        # Check if the event time is within the kinexon scene
-        # if self.kinexon_scene is not None:
-        #     kinexon_scene_time = self.kinexon_scene["time"].values
-        #     assert (
-        #         self.event_time_start in kinexon_scene_time
-        #     ), f"Event time not in kinexon scene: {self.event_time_start}"
-        pass
+        # Check the time difference between the event and the kinexon data
+        if self.df_kinexon_event is not None:
+            diff = (
+                pd.to_datetime(self.df_kinexon_event["time"].iloc[0])
+                - self.event_time_start
+            )
+            if diff.total_seconds() > 15 or diff.total_seconds() < -15:
+                print(
+                    f"\t !!! Event ID: {self.event_id}: {self.event_type} - Event time: {self.event_time_start} - Kinexon time: {self.df_kinexon_event['time'].iloc[0]} - Difference: {diff.total_seconds()} s"
+                )
+                # raise ValueError(
+                #     "Time difference between event and kinexon data is too large."
+                # )
 
     def to_dict(self) -> dict:
         """Return a dictionary representation of the GameEvent."""
