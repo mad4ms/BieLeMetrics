@@ -4,7 +4,7 @@ from glob import glob
 import re
 from collections import defaultdict
 import platform
-
+import argparse
 
 import sys
 import os
@@ -68,7 +68,7 @@ def extract_gameday(file_name: str) -> int:
 
 
 # Function to process games by game day sequentially
-def run_sequential_processing_by_gameday(path_to_files):
+def run_sequential_processing_by_gameday(path_to_files, gameday: int = None):
     """Finds files, groups them by gameday, and processes them sequentially."""
     list_files_sportradar = glob(
         f"{path_to_files}/**/*sportradar.json", recursive=True
@@ -76,6 +76,14 @@ def run_sequential_processing_by_gameday(path_to_files):
     list_files_kinexon = glob(
         f"{path_to_files}/**/*kinexon.csv", recursive=True
     )
+
+    if gameday is not None:
+        list_files_sportradar = [
+            file for file in list_files_sportradar if f"_gd_{gameday}_" in file
+        ]
+        list_files_kinexon = [
+            file for file in list_files_kinexon if f"_gd_{gameday}_" in file
+        ]
 
     print(f"Found {len(list_files_sportradar)} Sportradar files")
     print(f"Found {len(list_files_kinexon)} Kinexon files")
@@ -103,5 +111,9 @@ def run_sequential_processing_by_gameday(path_to_files):
 
 if __name__ == "__main__":
     # Path to the raw files directory
+    parser = argparse.ArgumentParser()
+    parser.add_argument("gameday", help="Gameday", type=str)
+    args = parser.parse_args()
+    gameday = args.gameday
     path_to_files = "data/raw"
-    run_sequential_processing_by_gameday(path_to_files)
+    run_sequential_processing_by_gameday(path_to_files, gameday)

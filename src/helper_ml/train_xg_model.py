@@ -53,13 +53,17 @@ features = [
     "distance_player_to_goalkeeper",  # distance between player and goalkeeper
     "distance_goalkeeper_to_goal",  # distance between goalkeeper and goal
     "angle_player_to_goal",  # angle of the ball relative to the goal
-    "angle_ball_to_goal",
-    "speed_ball",  # speed of the ball when thrown
+    # "angle_ball_to_goal",
+    # "speed_ball",  # speed of the ball when thrown
     "speed_player",  # speed of the player
     "distance_player_to_nearst_opponent",  # distance to the nearest defender
     "distance_player_to_nearest_teammate",  # number of defenders close to the player
     # "num_opponents_between_player_and_goal",  # number of defenders between player and goal
     "num_opponents_close_to_player",  # number of defenders close to the player
+    "efficiency_shots_team",  # efficiency of the team in scoring goals
+    "efficiency_shots_player",  # efficiency of the player in scoring goals
+    "efficiency_goalkeeper",  # efficiency of the goalkeeper in saving goals
+    # "home_advantage",  # home advantage
 ]
 
 target_column = "event_type"  # target column to predict
@@ -75,7 +79,7 @@ relevant_event_types = [
     "shot_saved",
     "seven_m_missed",
 ]
-
+print()
 df = df[df["event_type"].isin(relevant_event_types)]
 
 # drop nan values
@@ -134,13 +138,9 @@ path_out = "./data/ml_stuff/automl_2"
 automl = AutoML(
     results_path=path_out,
     algorithms=[
-        # "Baseline",
-        # "Linear",
-        # "Xgboost",
-        # "CatBoost",
-        # "LightGBM",
-        # "Random Forest",
-        "Neural Network",
+        "Xgboost",
+        "CatBoost",
+        "Random Forest",
     ],
     total_time_limit=5 * 60,
     # n_jobs=6,

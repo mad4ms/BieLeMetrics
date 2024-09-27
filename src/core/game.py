@@ -10,6 +10,10 @@ from src.processing.helper_processing.helper_game_processing import (
     add_scores_to_events,
     calc_attack_direction,
     insert_names_competitors,
+    calc_team_shot_efficiency,
+    calc_player_shot_efficiency,
+    insert_player_ids,
+    calc_goalkeeper_efficiency,
 )
 
 
@@ -258,5 +262,19 @@ class Game:
         add_scores_to_events(self.dict_kinexon_path_by_event_id)
         calc_attack_direction(self.dict_kinexon_path_by_event_id)
         insert_names_competitors(
+            self.dict_kinexon_path_by_event_id, self.dict_sportradar
+        )
+        insert_player_ids(
+            self.dict_kinexon_path_by_event_id, self.dict_sportradar
+        )
+
+        calc_team_shot_efficiency(
+            self.dict_kinexon_path_by_event_id, self.dict_sportradar
+        )
+        calc_player_shot_efficiency(
+            self.dict_kinexon_path_by_event_id, self.dict_sportradar
+        )
+
+        calc_goalkeeper_efficiency(
             self.dict_kinexon_path_by_event_id, self.dict_sportradar
         )

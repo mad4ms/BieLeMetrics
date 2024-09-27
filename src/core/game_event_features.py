@@ -284,7 +284,10 @@ class GameEventFeatures:
         # Check if the ball is in the data and access the "speed" column to get the speed
         if not row_ball.empty:
             self.speed_ball = row_ball["speed"].values[0]
-            print(f"\t> Speed ball: {self.speed_ball:.2f} ✅")
+            if not pd.isna(self.speed_ball):
+                print(f"\t> Speed ball: {self.speed_ball:.2f} ✅")
+            else:
+                print("\t> Speed ball: NaN ❌")
         else:
             print("\t> Speed ball: None ❌")
 

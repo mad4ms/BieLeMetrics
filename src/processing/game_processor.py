@@ -70,12 +70,15 @@ class GameProcessor:
             event_id,
             dict_event,
         ) in self.game.dict_kinexon_path_by_event_id.items():
+            # create game event object
             game_event = GameEvent(
                 dict_event,
                 self.game.dict_kinexon_path_by_event_id[event_id][
                     "path_kinexon"
                 ],
             )
+            # set match id
+            game_event.match_id = self.game.match_id
             # game_event.process_event()
             self.list_game_events.append(game_event)
 
@@ -91,13 +94,24 @@ class GameProcessor:
         """
         df_result = pd.DataFrame()
 
-        print("Saving game events...")
+        print(f"Saving game events for match ID: {self.game.match_id}")
         for game_event in self.list_game_events:
             df_game_event = pd.DataFrame([game_event.to_dict()])
+            # add match id to the dataframe
+            df_game_event["match_id"] = self.game.match_id
 
-            df_result = pd.concat(
-                [df_result, df_game_event], ignore_index=True
-            )
+            relevant_event_types = [
+                "score_change",
+                "shot_off_target",
+                "shot_blocked",
+                "shot_saved",
+                "seven_m_missed",
+            ]
+
+            if df_game_event["event_type"].values[0] in relevant_event_types:
+                df_result = pd.concat(
+                    [df_result, df_game_event], ignore_index=True
+                )
 
         # makedir of basepath
         os.makedirs(os.path.dirname(self.path_file_result), exist_ok=True)
@@ -108,9 +122,9 @@ class GameProcessor:
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("path_file_sportradar", help="path to sportradar file")
-    parser.add_argument("path_file_kinexon", help="path to kinexon file")
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("path_file_sportradar", help="path to sportradar file")
+    # parser.add_argument("path_file_kinexon", help="path to kinexon file")
 
     # args = parser.parse_args()
     # path_file_kinexon = args.path_file_kinexon

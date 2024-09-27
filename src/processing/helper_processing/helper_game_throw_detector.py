@@ -381,12 +381,12 @@ class ThrowEventDetector:
         # Remove peaks where the ball is not moving towards the goal
         # Remove peaks where the distance to the goal is too large
         peaks = self._remove_peaks_above_player_to_ball_distance_threshold(
-            peaks, threshold_dist=1.5
+            peaks, threshold_dist=1.2
         )
         # Remove peaks that are too close to the tagging time
         peaks = self._remove_peaks_too_close_to_tagging_time(peaks)
 
-        peaks = self._remove_peaks_not_moving_towards_goal(peaks)
+        # peaks = self._remove_peaks_not_moving_towards_goal(peaks)
 
         return peaks
 

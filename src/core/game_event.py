@@ -74,6 +74,9 @@ class GameEvent:
         # Check metadata
         self._check_meta_data()
 
+        # Check and insert ball speed
+        self._check_and_insert_ball_speed()
+
         # process
         self._process_event()
 
@@ -161,6 +164,8 @@ class GameEvent:
                 df_value_count_ball_ids.index.str.contains("ball|Ball")
             ].idxmax()
         except AttributeError:
+            self.id_ball = None
+        except ValueError:
             self.id_ball = None
 
         if self.df_moment_throw.empty or self.id_ball is None:
@@ -335,12 +340,77 @@ class GameEvent:
         self.gameday = self.event.get("gameday")
         self.competition_name = self.event.get("competition_name")
 
+        # Efficiencies calculated in previous steps
+        self.efficiency_shots_team = self.event.get("shot_efficiency")
+        self.shots_total_team = self.event.get("total_shots")
+        self.goals_total_team = self.event.get("total_goals")
+        self.efficiency_shots_player = self.event.get("shot_efficiency_player")
+        self.shots_total_player = self.event.get("cumulative_shots_player")
+        self.goals_total_player = self.event.get("cumulative_goals_player")
+        self.efficiency_goalkeeper = self.event.get("goalkeeper_efficiency")
+        # cumulative_shots_saved, cumulative_goals_conceded
+        self.shots_saved_goalkeeper = self.event.get("cumulative_shots_saved")
+        self.goals_conceded_goalkeeper = self.event.get(
+            "cumulative_goals_conceded"
+        )
+        # home_advantage = 1 if competitor is home team, 0 if away team
+        self.home_advantage = 1 if self.competitor == "home" else 0
+
     def _init_metadata_event_kinexon(self) -> None:
         """Initialize Kinexon metadata from the event dictionary."""
         if os.path.exists(self.path_to_kinexon_scene):
             self.df_kinexon_event = pd.read_csv(self.path_to_kinexon_scene)
         else:
             self.df_kinexon_event = None
+
+    def _check_and_insert_ball_speed(self) -> None:
+        """Check if the ball speed is available and insert it into the dictionary."""
+        if self.df_kinexon_event is not None:
+            # Ensure league_id is a string
+            self.df_kinexon_event["league_id"] = self.df_kinexon_event[
+                "league_id"
+            ].astype(str)
+
+            # Filter the ball rows
+            df_ball = self.df_kinexon_event[
+                self.df_kinexon_event["league_id"].str.contains(
+                    "ball|Ball", case=False
+                )
+            ]
+
+            if not df_ball.empty:
+                # Ensure time is in datetime format
+                self.df_kinexon_event["time"] = pd.to_datetime(
+                    self.df_kinexon_event["time"], errors="coerce"
+                )
+                df_ball["time"] = pd.to_datetime(
+                    df_ball["time"], errors="coerce"
+                )
+
+                df_ball = df_ball.sort_values(by="time").reset_index(drop=True)
+
+                # Calculate distance between consecutive points
+                df_ball["distance"] = (
+                    (df_ball["pos_x"].diff()) ** 2
+                    + (df_ball["pos_y"].diff()) ** 2
+                ) ** 0.5
+
+                # Calculate time difference in seconds
+                df_ball["time_diff"] = (
+                    df_ball["time"].diff().dt.total_seconds()
+                )
+
+                # Calculate speed
+                df_ball["speed"] = df_ball["distance"] / df_ball["time_diff"]
+                df_ball["speed"] = df_ball["speed"].fillna(0)
+
+                # Only update the speed for ball entries
+                self.df_kinexon_event.loc[
+                    self.df_kinexon_event["league_id"].str.contains(
+                        "ball|Ball", case=False
+                    ),
+                    "speed",
+                ] = df_ball["speed"].values
 
     def _check_meta_data(self) -> None:
         """Check if the metadata is correct."""
@@ -394,6 +464,10 @@ class GameEvent:
             "pos_y_goalkeeper": self.pos_y_goalkeeper,
             "pos_x_blocker": self.pos_x_blocker,
             "pos_y_blocker": self.pos_y_blocker,
+            "efficiency_shots_team": self.efficiency_shots_team,
+            "efficiency_shots_player": self.efficiency_shots_player,
+            "efficiency_goalkeeper": self.efficiency_goalkeeper,
+            "home_advantage": self.home_advantage,
         }
 
         if self.dict_features:
