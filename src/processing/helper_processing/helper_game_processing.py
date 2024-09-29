@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import glob
 import json
+import numpy as np
 
 def add_missing_goalkeeper_to_events(dict_event_id_kinexon_path: dict) -> None:
     """
@@ -287,8 +288,16 @@ def calc_team_shot_efficiency(
         # Assign shot efficiency to the current event in the dictionary
         if not latest_event.empty:
             dict_event["shot_efficiency"] = latest_event["shot_efficiency"].values[0]
-            dict_event["total_shots"] = latest_event["cumulative_shots"].values[0]
-            dict_event["total_goals"] = latest_event["cumulative_goals"].values[0]
+
+            if not np.isnan(latest_event["cumulative_shots"].values[0]):
+                dict_event["total_shots"] = int(latest_event["cumulative_shots"].values[0])
+            else:
+                dict_event["total_shots"] = None
+
+            if not np.isnan(latest_event["cumulative_goals"].values[0]):
+                dict_event["total_goals"] = int(latest_event["cumulative_goals"].values[0])
+            else:
+                dict_event["total_goals"] = None
         else:
             dict_event["shot_efficiency"] = None  # Handle cases where event_id is not found
             dict_event["total_shots"] = None
@@ -366,13 +375,20 @@ def calc_player_shot_efficiency(
             dict_event["shot_efficiency_player"] = latest_event[
                 "shot_efficiency_player"
             ].values[0]
-            # also total shots and goals
-            dict_event["total_shots_players"] = latest_event[
-                "cumulative_shots_player"
-            ].values[0]
-            dict_event["total_goals_player"] = latest_event[
-                "cumulative_goals_player"
-            ].values[0]
+            if not np.isnan(latest_event["cumulative_shots_player"].values[0]):
+                # also total shots and goals
+                dict_event["total_shots_players"] = int(latest_event[
+                    "cumulative_shots_player"
+                ].values[0])
+            else:
+                dict_event["total_shots_player"] = None
+
+            if not np.isnan(latest_event["cumulative_goals_player"].values[0]):
+                dict_event["total_goals_player"] = int(latest_event[
+                    "cumulative_goals_player"
+                ].values[0])
+            else:
+                dict_event["total_goals_player"] = None
         else:
             dict_event["shot_efficiency_player"] = (
                 None  # Handle cases where event_id is not found
@@ -447,13 +463,21 @@ def calc_goalkeeper_efficiency(
             dict_event["goalkeeper_efficiency"] = latest_event[
                 "goalkeeper_efficiency"
             ].values[0]
-            # also total shots saved and goals conceded
-            dict_event["total_shots_saved"] = latest_event[
-                "cumulative_shots_saved"
-            ].values[0]
-            dict_event["total_goals_conceded"] = latest_event[
-                "cumulative_goals_conceded"
-            ].values[0]
+            if not np.isnan(latest_event["cumulative_shots_saved"].values[0]):
+                # also total shots saved and goals conceded
+                dict_event["total_shots_saved"] = int(latest_event[
+                    "cumulative_shots_saved"
+                ].values[0])
+            else:
+                dict_event["total_shots_saved"] = None
+
+            if not np.isnan(latest_event["cumulative_goals_conceded"].values[0]):
+                dict_event["total_goals_conceded"] = int(latest_event[
+                    "cumulative_goals_conceded"
+                ].values[0])
+            else:
+                dict_event["total_goals_conceded"] = None
+
         else:
             dict_event["goalkeeper_efficiency"] = (
                 None  # Handle cases where event_id is not found

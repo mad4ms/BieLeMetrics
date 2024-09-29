@@ -54,7 +54,7 @@ class ThrowEventDetector:
             return None
 
         self.data_kinexon_event["time"] = pd.to_datetime(
-            self.data_kinexon_event["time"]
+            self.data_kinexon_event["time"], dayfirst=True
         )
 
         # Extract ball id

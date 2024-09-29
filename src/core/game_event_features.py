@@ -76,6 +76,8 @@ class GameEventFeatures:
         # home advantage
         self.home_advantage = None  # Can be 1 or 0
 
+        self.abort_reason = ""
+
     def calculate_features(self):
 
         self._calculate_distance_player_to_goal()
@@ -87,6 +89,7 @@ class GameEventFeatures:
         self._calculate_angle_player_to_goal()
         self._calculate_angle_ball_to_goal()
         self._calc_speeds()
+        self._calc_number_of_opponents_between_player_and_goal()
 
         pass
 
@@ -100,6 +103,9 @@ class GameEventFeatures:
                 f"\t> Distance player <--> goal: {self.distance_player_to_goal:.2f} ✅"
             )
         else:
+            self.abort_reason += (
+                "No player position:(_calculate_distance_player_to_goal)"
+            )
             print("\t> Distance player <--> goal: None ❌")
 
     def _calculate_distance_player_to_goalkeeper(self):
@@ -115,6 +121,7 @@ class GameEventFeatures:
                 f"\t> Distance player <--> goalkeeper: {self.distance_player_to_goalkeeper:.2f} ✅"
             )
         else:
+            self.abort_reason += "No player or goalkeeper position:(_calculate_distance_player_to_goalkeeper)"
             print("\t> Distance player <--> goalkeeper: None ❌")
 
     def _calculate_distance_player_to_blocker(self):
@@ -165,6 +172,7 @@ class GameEventFeatures:
                 f"\t> Distance player <--> nearest opponent: {self.distance_player_to_nearst_opponent:.2f} ✅"
             )
         else:
+            self.abort_reason += "No throw positions:(_calculate_distance_player_to_nearst_opponent)"
             print("\t> Distance player <--> nearest opponent: None ❌")
 
     def _calculate_distance_player_to_nearest_teammate(self):
@@ -196,6 +204,7 @@ class GameEventFeatures:
                 f"\t> Distance player <--> nearest teammate: {self.distance_player_to_nearest_teammate:.2f} ✅"
             )
         else:
+            self.abort_reason += "No throw positions:(_calculate_distance_player_to_nearest_teammate)"
             print("\t> Distance player <--> nearest teammate: None ❌")
 
     def _calculate_distance_goalkeeper_to_goal(self):
@@ -208,6 +217,7 @@ class GameEventFeatures:
                 f"\t> Distance goalkeeper <--> goal: {self.distance_goalkeeper_to_goal:.2f} ✅"
             )
         else:
+            self.abort_reason += "No goalkeeper position:(_calculate_distance_goalkeeper_to_goal)"
             print("\t> Distance goalkeeper <--> goal: None ❌")
 
     def _calculate_angle_ball_to_goal(self):
@@ -237,6 +247,9 @@ class GameEventFeatures:
                 f"\t> Angle ball <--> goal: {self.angle_ball_to_goal:.2f} ✅"
             )
         else:
+            self.abort_reason += (
+                "No throw or ball position:(_calculate_angle_ball_to_goal)"
+            )
             print("\t> Angle ball <--> goal: None ❌")
 
     def _calculate_angle_player_to_goal(self):
@@ -275,6 +288,7 @@ class GameEventFeatures:
             self.speed_player = row_player["speed"].values[0]
             print(f"\t> Speed player: {self.speed_player:.2f} ✅")
         else:
+            self.abort_reason += "No player position:(_calc_speeds)"
             print("\t> Speed player: None ❌")
 
         # Find id_ball in data_kinexon_throw
@@ -290,6 +304,101 @@ class GameEventFeatures:
                 print("\t> Speed ball: NaN ❌")
         else:
             print("\t> Speed ball: None ❌")
+
+    def _calc_number_of_opponents_between_player_and_goal(self):
+        """Calculate the number of opponents between the player and the goal"""
+
+        if not self.data_kinexon_throw.empty:
+
+            # Find id_player in data_kinexon_throw
+            row_player = self.data_kinexon_throw[
+                self.data_kinexon_throw["league_id"] == self.id_throw_player
+            ]
+
+            # Find players of the other team
+            rows_opponents = self.data_kinexon_throw[
+                self.data_kinexon_throw["group_id"]
+                != row_player["group_id"].values[0]
+            ]
+
+            # Remove the goalkeeper and ball
+            rows_opponents = rows_opponents[
+                (rows_opponents["league_id"] != self.id_goalkeeper)
+                & (rows_opponents["league_id"] != self.id_ball)
+            ]
+
+            # Calculate the angle between the player and the goal
+            _angle_player_to_goal = math.atan2(
+                self.goal_position_y - self.throw_player_pos_y,
+                self.goal_position_x - self.throw_player_pos_x,
+            )
+
+            # Rotate the angle by 90 degrees to get a perpendicular direction
+            _angle_perpendicular = _angle_player_to_goal + math.pi / 2
+
+            # Arm reach of a player: 1 meter
+            reach_player = 1
+
+            # Define two points on either side of the player (1 meter apart) using the perpendicular angle
+            p0 = (
+                self.throw_player_pos_x
+                + reach_player * math.cos(_angle_perpendicular),
+                self.throw_player_pos_y
+                + reach_player * math.sin(_angle_perpendicular),
+            )
+
+            p1 = (
+                self.throw_player_pos_x
+                - reach_player * math.cos(_angle_perpendicular),
+                self.throw_player_pos_y
+                - reach_player * math.sin(_angle_perpendicular),
+            )
+
+            # Define the polygon (triangle) with the two points on the player and the goalposts
+            goal_post_upper = (
+                self.goal_position_x,
+                self.goal_position_y + 1.5,
+            )
+            goal_post_lower = (
+                self.goal_position_x,
+                self.goal_position_y - 1.5,
+            )
+
+            polygon = [p0, p1, goal_post_upper, goal_post_lower]
+
+            # Check if the opponents are inside the polygon
+            self.num_opponents_between_player_and_goal = 0
+            for index, row in rows_opponents.iterrows():
+                if self._is_point_in_polygon(
+                    (row["pos_x"], row["pos_y"]), polygon
+                ):
+                    self.num_opponents_between_player_and_goal += 1
+
+        else:
+            self.abort_reason += "No throw positions:(_calc_number_of_opponents_between_player_and_goal)"
+            print("\t> Number of opponents between player and goal: None ❌")
+
+    def _is_point_in_polygon(self, point, polygon):
+        """Check if a point is inside a polygon using the ray-casting algorithm"""
+        x, y = point
+        n = len(polygon)
+        inside = False
+        p1x, p1y = polygon[0]
+
+        for i in range(1, n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (
+                                p2y - p1y
+                            ) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
 
     def get_features(self):
         return {

@@ -130,7 +130,12 @@ if __name__ == "__main__":
     # path_file_kinexon = args.path_file_kinexon
     # path_file_sportradar = args.path_file_sportradar
 
-    path_file_sportradar = "./data/raw/gameday_01/sportradar/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_sportradar.json"
-    path_file_kinexon = "./data/raw/gameday_01/kinexon/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_kinexon.csv"
+    # path_file_sportradar = "./data/raw/gameday_01/sportradar/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_sportradar.json"
+    # path_file_kinexon = "./data/raw/gameday_01/kinexon/2023-08-24_gd_01_id_42307421_teams_HCErlangen_vs_TSVHannover-Burgdorf_kinexon.csv"
+
+    path_file_sportradar = "./data/raw/gameday_01/sportradar/2023-08-24_gd_01_id_42307423_teams_SGFlensburg-Handewitt_vs_HSVHamburg_sportradar.json"
+    path_file_kinexon = "./data/raw/gameday_01/kinexon/2023-08-24_gd_01_id_42307423_teams_SGFlensburg-Handewitt_vs_HSVHamburg_kinexon.csv"
+
+    #
 
     game_processing = GameProcessor(path_file_sportradar, path_file_kinexon)

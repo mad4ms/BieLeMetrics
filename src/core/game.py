@@ -116,6 +116,16 @@ class Game:
             ]
         ].rename(columns=self.kinexon_config)
 
+        # Fix for Flensburg where y-coordinates += 12 m
+        if (
+            self.dict_sportradar["sport_event"]["venue"]["id"]
+            == "sr:venue:2009"
+        ):
+            print("Flensburg venue detected, adjusting y-coordinates.")
+            df_kinexon_cleaned["pos_y"] = df_kinexon_cleaned["pos_y"].apply(
+                lambda x: x - 12
+            )
+
         # Sportradar data does not require cleaning at this point
         return df_kinexon_cleaned, self.dict_sportradar
 

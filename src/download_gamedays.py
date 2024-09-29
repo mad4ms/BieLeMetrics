@@ -94,6 +94,9 @@ def run_parallel_downloads_by_gameday(file_path):
     grouped = df.groupby("Game Day")["ID"].apply(list).to_dict()
 
     for game_day, game_ids in grouped.items():
+        if game_day < 10:
+            continue
+
         print(f"Starting download for Game Day {game_day}")
         download_games_for_gameday(game_ids)
         print(f"Completed downloads for Game Day {game_day}\n")

@@ -124,7 +124,7 @@ class GameEvent:
                 )
 
         self.df_kinexon_event["time"] = pd.to_datetime(
-            self.df_kinexon_event["time"]
+            self.df_kinexon_event["time"], dayfirst=True
         )
 
         # Extract throw moment
@@ -376,15 +376,17 @@ class GameEvent:
                 self.df_kinexon_event["league_id"].str.contains(
                     "ball|Ball", case=False
                 )
-            ]
+            ].copy()
 
             if not df_ball.empty:
                 # Ensure time is in datetime format
                 self.df_kinexon_event["time"] = pd.to_datetime(
-                    self.df_kinexon_event["time"], errors="coerce"
+                    self.df_kinexon_event["time"],
+                    errors="coerce",
+                    dayfirst=True,
                 )
                 df_ball["time"] = pd.to_datetime(
-                    df_ball["time"], errors="coerce"
+                    df_ball["time"], errors="coerce", dayfirst=True
                 )
 
                 df_ball = df_ball.sort_values(by="time").reset_index(drop=True)
@@ -455,7 +457,6 @@ class GameEvent:
             "name_assist": self.name_assist,
             "attack_direction": self.attack_direction,
             "gameday": self.gameday,
-            "competition_name": self.competition_name,
             "pos_x_player": self.throw_player_pos_x,
             "pos_y_player": self.throw_player_pos_y,
             "pos_x_ball": self.throw_ball_pos_x,
