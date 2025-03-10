@@ -20,6 +20,9 @@ id_game = ""
 START_AFTER_MODE = False
 START_AFTER_ID = ""
 
+SPECIFIC_TEAM_MODE = False
+SPECIFIC_TEAM = "TVB Stuttgart"
+
 
 # Function to process a single game sequentially
 def process_game_sequential(path_file_sportradar: str, path_file_kinexon: str):
@@ -43,6 +46,10 @@ def process_game_sequential(path_file_sportradar: str, path_file_kinexon: str):
         else:
             START_AFTER_MODE = False
 
+    if SPECIFIC_TEAM_MODE:
+        if not SPECIFIC_TEAM in path_file_sportradar:
+            return
+
     process_game(path_file_sportradar, path_file_kinexon)
     print(
         f"Processed game with Sportradar: {path_file_sportradar} and Kinexon: {path_file_kinexon}"
@@ -55,6 +62,9 @@ def process_game_sequential(path_file_sportradar: str, path_file_kinexon: str):
 def process_games_for_gameday(game_data):
     """Process all games for a specific game day sequentially."""
     for game in game_data:
+        print(
+            f"Processing game with Sportradar: {game['sportradar']} and Kinexon: {game['kinexon']}"
+        )
         process_game_sequential(game["sportradar"], game["kinexon"])
 
 

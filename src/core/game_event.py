@@ -12,6 +12,10 @@ from src.processing.helper_processing.helper_game_throw_detector import (
 
 import time
 
+import logging
+
+# logging.basicConfig(level=logging.INFO)
+
 
 class GameEvent:
     """Class representing a game event."""
@@ -64,11 +68,22 @@ class GameEvent:
         self._init_metadata_event_kinexon()
 
         # print known metadata
-        print(
-            f"> New event {self.event_id} type: {self.event_type} - Score: {self.home_score}-{self.away_score} - Event time: {self.event_time_tagged} - Player: {self.name_player} (Team: {self.name_team_attack}) - Goalkeeper: {self.name_goalkeeper} (Team: {self.name_team_defense})"
+        logging.info(
+            "New event %s type: %s - Score: %s-%s - Event time: %s - Player: %s (Team: %s) - Goalkeeper: %s (Team: %s)",
+            self.event_id,
+            self.event_type,
+            self.home_score,
+            self.away_score,
+            self.event_time_tagged,
+            self.name_player,
+            self.name_team_attack,
+            self.name_goalkeeper,
+            self.name_team_defense,
         )
-        print(
-            f"\t> Length positional data: {len(self.df_kinexon_event)} in file: {self.path_to_kinexon_scene}"
+        logging.info(
+            "Length positional data: %s in file: %s",
+            len(self.df_kinexon_event),
+            self.path_to_kinexon_scene,
         )
 
         # Check metadata
@@ -115,16 +130,22 @@ class GameEvent:
                 diff_throw.total_seconds() > 15
                 or diff_throw.total_seconds() < -15
             ):
-                print(
-                    f"\t> Throw time check: {self.event_time_throw} - Event time: {self.event_time_start} - Difference: {diff_throw.total_seconds()} s ❌"
+                logging.warning(
+                    "Throw time check: %s - Event time: %s - Difference: %s s ❌",
+                    self.event_time_throw,
+                    self.event_time_start,
+                    diff_throw.total_seconds(),
                 )
             else:
-                print(
-                    f"\t> Throw time check: {self.event_time_throw} - Event time: {self.event_time_start} - Difference: {diff_throw.total_seconds()} s ✅"
+                logging.info(
+                    "Throw time check: %s - Event time: %s - Difference: %s s ✅",
+                    self.event_time_throw,
+                    self.event_time_start,
+                    diff_throw.total_seconds(),
                 )
 
         self.df_kinexon_event["time"] = pd.to_datetime(
-            self.df_kinexon_event["time"], dayfirst=True
+            self.df_kinexon_event["time"], format="%Y-%m-%d %H:%M:%S.%f"
         )
 
         # Extract throw moment
@@ -360,6 +381,16 @@ class GameEvent:
         """Initialize Kinexon metadata from the event dictionary."""
         if os.path.exists(self.path_to_kinexon_scene):
             self.df_kinexon_event = pd.read_csv(self.path_to_kinexon_scene)
+            # convert time to datetime
+            try:
+                self.df_kinexon_event["time"] = pd.to_datetime(
+                    self.df_kinexon_event["time"],
+                    format="%Y-%m-%d %H:%M:%S.%f",
+                )
+            except ValueError:
+                self.df_kinexon_event["time"] = pd.to_datetime(
+                    self.df_kinexon_event["time"], format="%Y-%m-%d %H:%M:%S"
+                )
         else:
             self.df_kinexon_event = None
 
@@ -383,10 +414,12 @@ class GameEvent:
                 self.df_kinexon_event["time"] = pd.to_datetime(
                     self.df_kinexon_event["time"],
                     errors="coerce",
-                    dayfirst=True,
+                    format="%Y-%m-%d %H:%M:%S.%f",
                 )
                 df_ball["time"] = pd.to_datetime(
-                    df_ball["time"], errors="coerce", dayfirst=True
+                    df_ball["time"],
+                    errors="coerce",
+                    format="%Y-%m-%d %H:%M:%S.%f",
                 )
 
                 df_ball = df_ball.sort_values(by="time").reset_index(drop=True)
@@ -423,8 +456,14 @@ class GameEvent:
                 - self.event_time_start
             )
             if diff.total_seconds() > 15 or diff.total_seconds() < -15:
-                print(
-                    f"\t !!! Event ID: {self.event_id}: {self.event_type} - Event time: {self.event_time_start} - Kinexon time: {self.df_kinexon_event['time'].iloc[0]} - Difference: {diff.total_seconds()} s"
+
+                logging.warning(
+                    "\t !!! Event ID: %s: %s - Event time: %s - Kinexon time: %s - Difference: %s s",
+                    self.event_id,
+                    self.event_type,
+                    self.event_time_start,
+                    self.df_kinexon_event["time"].iloc[0],
+                    diff.total_seconds(),
                 )
                 # raise ValueError(
                 #     "Time difference between event and kinexon data is too large."
@@ -446,6 +485,9 @@ class GameEvent:
             "home_score": self.home_score,
             "away_score": self.away_score,
             "competitor": self.competitor,
+            "method": self.method,
+            "zone": self.zone,
+            "shot_type": self.shot_type,
             "id_ball": self.id_ball,
             "id_player": self.id_player,
             "name_player": self.name_player,

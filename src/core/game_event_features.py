@@ -2,8 +2,16 @@ import pandas as pd
 from typing import Dict, Any
 import math
 
+import logging
+
+# logging.basicConfig(level=logging.INFO)
+
 
 class GameEventFeatures:
+    """
+    Class to calculate features for a game event.
+    """
+
     def __init__(self, event_dict: Dict[str, Any], data_kinexon: pd.DataFrame):
         self.event_dict = event_dict
         self.data_kinexon_throw = data_kinexon
@@ -99,14 +107,16 @@ class GameEventFeatures:
                 (self.throw_player_pos_x - self.goal_position_x) ** 2
                 + (self.throw_player_pos_y - self.goal_position_y) ** 2
             ) ** 0.5
-            print(
-                f"\t> Distance player <--> goal: {self.distance_player_to_goal:.2f} ✅"
+            logging.info(
+                "\t> Distance player <--> goal: %.2f ✅",
+                self.distance_player_to_goal,
             )
+
         else:
             self.abort_reason += (
                 "No player position:(_calculate_distance_player_to_goal)"
             )
-            print("\t> Distance player <--> goal: None ❌")
+            logging.info("\t> Distance player <--> goal: None ❌")
 
     def _calculate_distance_player_to_goalkeeper(self):
         if (
@@ -117,12 +127,14 @@ class GameEventFeatures:
                 (self.throw_player_pos_x - self.pos_x_goalkeeper) ** 2
                 + (self.throw_player_pos_y - self.pos_y_goalkeeper) ** 2
             ) ** 0.5
-            print(
-                f"\t> Distance player <--> goalkeeper: {self.distance_player_to_goalkeeper:.2f} ✅"
+            logging.info(
+                "\t> Distance player <--> goalkeeper: %.2f ✅",
+                self.distance_player_to_goalkeeper,
             )
+
         else:
             self.abort_reason += "No player or goalkeeper position:(_calculate_distance_player_to_goalkeeper)"
-            print("\t> Distance player <--> goalkeeper: None ❌")
+            logging.info("\t> Distance player <--> goalkeeper: None ❌")
 
     def _calculate_distance_player_to_blocker(self):
         if (
@@ -133,11 +145,12 @@ class GameEventFeatures:
                 (self.throw_player_pos_x - self.pos_x_blocker) ** 2
                 + (self.throw_player_pos_y - self.pos_y_blocker) ** 2
             ) ** 0.5
-            print(
-                f"\t> Distance player <--> blocker: {self.distance_player_to_blocker:.2f} ✅"
+            logging.info(
+                "\t> Distance player <--> blocker: %.2f ✅",
+                self.distance_player_to_blocker,
             )
         else:
-            print("\t> Distance player <--> blocker: None ❌")
+            logging.info("\t> Distance player <--> blocker: None ❌")
 
     def _calculate_distance_player_to_nearst_opponent(self):
         self.distance_player_to_nearst_opponent = 50
@@ -168,12 +181,14 @@ class GameEventFeatures:
                 if distance < 1.5:
                     self.num_opponents_close_to_player += 1
 
-            print(
-                f"\t> Distance player <--> nearest opponent: {self.distance_player_to_nearst_opponent:.2f} ✅"
+            logging.info(
+                "\t> Distance player <--> nearest opponent: %.2f ✅",
+                self.distance_player_to_nearst_opponent,
             )
         else:
             self.abort_reason += "No throw positions:(_calculate_distance_player_to_nearst_opponent)"
-            print("\t> Distance player <--> nearest opponent: None ❌")
+
+            logging.info("\t> Distance player <--> nearest opponent: None ❌")
 
     def _calculate_distance_player_to_nearest_teammate(self):
         self.distance_player_to_nearest_teammate = 50
@@ -200,12 +215,14 @@ class GameEventFeatures:
                     self.distance_player_to_nearest_teammate = distance
                     self.id_nearest_teammate = row["league_id"]
 
-            print(
-                f"\t> Distance player <--> nearest teammate: {self.distance_player_to_nearest_teammate:.2f} ✅"
+            logging.info(
+                "\t> Distance player <--> nearest teammate: %.2f ✅",
+                self.distance_player_to_nearest_teammate,
             )
+
         else:
             self.abort_reason += "No throw positions:(_calculate_distance_player_to_nearest_teammate)"
-            print("\t> Distance player <--> nearest teammate: None ❌")
+            logging.info("\t> Distance player <--> nearest teammate: None ❌")
 
     def _calculate_distance_goalkeeper_to_goal(self):
         if self.pos_x_goalkeeper is not None:
@@ -213,12 +230,14 @@ class GameEventFeatures:
                 (self.pos_x_goalkeeper - self.goal_position_x) ** 2
                 + (self.pos_y_goalkeeper - self.goal_position_y) ** 2
             ) ** 0.5
-            print(
-                f"\t> Distance goalkeeper <--> goal: {self.distance_goalkeeper_to_goal:.2f} ✅"
+            logging.info(
+                "\t> Distance goalkeeper <--> goal: %.2f ✅",
+                self.distance_goalkeeper_to_goal,
             )
+
         else:
             self.abort_reason += "No goalkeeper position:(_calculate_distance_goalkeeper_to_goal)"
-            print("\t> Distance goalkeeper <--> goal: None ❌")
+            logging.info("\t> Distance goalkeeper <--> goal: None ❌")
 
     def _calculate_angle_ball_to_goal(self):
         #  Get the angle of the throw using atan2
@@ -242,15 +261,15 @@ class GameEventFeatures:
                 angle_throw = 360 - angle_throw
 
             self.angle_ball_to_goal = abs(90 - angle_throw)
-
-            print(
-                f"\t> Angle ball <--> goal: {self.angle_ball_to_goal:.2f} ✅"
+            logging.info(
+                "\t> Angle ball <--> goal: %.2f ✅",
+                self.angle_ball_to_goal,
             )
         else:
             self.abort_reason += (
                 "No throw or ball position:(_calculate_angle_ball_to_goal)"
             )
-            print("\t> Angle ball <--> goal: None ❌")
+            logging.info("\t> Angle ball <--> goal: None ❌")
 
     def _calculate_angle_player_to_goal(self):
         if (
@@ -272,11 +291,13 @@ class GameEventFeatures:
 
             self.angle_player_to_goal = abs(90 - angle_player)
 
-            print(
-                f"\t> Angle player <--> goal: {self.angle_player_to_goal:.2f} ✅"
+            logging.info(
+                "\t> Angle player <--> goal: %.2f ✅",
+                self.angle_player_to_goal,
             )
+
         else:
-            print("\t> Angle player <--> goal: None ❌")
+            logging.info("\t> Angle player <--> goal: None ❌")
 
     def _calc_speeds(self):
         # Find id_player in data_kinexon_throw
@@ -286,10 +307,13 @@ class GameEventFeatures:
         # Check if the player is in the data and access the "speed" column to get the speed
         if not row_player.empty:
             self.speed_player = row_player["speed"].values[0]
-            print(f"\t> Speed player: {self.speed_player:.2f} ✅")
+            logging.info(
+                "\t> Speed player: %.2f ✅",
+                self.speed_player,
+            )
         else:
             self.abort_reason += "No player position:(_calc_speeds)"
-            print("\t> Speed player: None ❌")
+            logging.info("\t> Speed player: None ❌")
 
         # Find id_ball in data_kinexon_throw
         row_ball = self.data_kinexon_throw[
@@ -299,11 +323,14 @@ class GameEventFeatures:
         if not row_ball.empty:
             self.speed_ball = row_ball["speed"].values[0]
             if not pd.isna(self.speed_ball):
-                print(f"\t> Speed ball: {self.speed_ball:.2f} ✅")
+                logging.info(
+                    "\t> Speed ball: %.2f ✅",
+                    self.speed_ball,
+                )
             else:
-                print("\t> Speed ball: NaN ❌")
+                logging.info("\t> Speed ball: NaN ❌")
         else:
-            print("\t> Speed ball: None ❌")
+            logging.info("\t> Speed ball: NaN (No ball data)❌")
 
     def _calc_number_of_opponents_between_player_and_goal(self):
         """Calculate the number of opponents between the player and the goal"""
@@ -376,7 +403,9 @@ class GameEventFeatures:
 
         else:
             self.abort_reason += "No throw positions:(_calc_number_of_opponents_between_player_and_goal)"
-            print("\t> Number of opponents between player and goal: None ❌")
+            logging.info(
+                "\t> Number of opponents between player and goal: None ❌"
+            )
 
     def _is_point_in_polygon(self, point, polygon):
         """Check if a point is inside a polygon using the ray-casting algorithm"""

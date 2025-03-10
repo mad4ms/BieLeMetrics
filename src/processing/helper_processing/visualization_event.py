@@ -126,8 +126,12 @@ def plot_event_syncing(event_game: GameEvent):
         return
     df_player_ball = event_game.data_kinexon_event_player_ball
 
-    if event_game.event_time_throw is None:
+    if df_player_ball is None or df_player_ball.empty:
+        print(f"No player-ball data available for event {event_game.event_id}")
         return
+
+    # if event_game.event_time_throw is None:
+    #     return
     if event_game.attack_direction not in ["left", "right"]:
         print(f"! Attack direction is not set for event {event_game.event_id}")
         return
@@ -845,6 +849,17 @@ def plot_text(img_draw, event_game: GameEvent):
             (255, 255, 255),
             1,
         )
+
+        # Team names
+    cv2.putText(
+        img_draw,
+        f"Attack: {event_game.name_team_attack} and Defense: {event_game.name_team_defense}",
+        (10, 140),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        1,
+    )
 
     # Distance to goal
     # if (

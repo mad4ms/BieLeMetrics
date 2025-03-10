@@ -4,6 +4,7 @@ import glob
 import json
 import numpy as np
 
+
 def add_missing_goalkeeper_to_events(dict_event_id_kinexon_path: dict) -> None:
     """
     Add missing goalkeeper to the events in the dictionary.
@@ -101,12 +102,21 @@ def calc_attack_direction(dict_event_id_kinexon_path: dict) -> None:
     list_goalkeeper_home_ids = []
     list_goalkeeper_positions_home = []
 
+    relevant_event_types = [
+        "score_change",
+        "shot_off_target",
+        "shot_blocked",
+        "shot_saved",
+        "seven_m_missed",
+    ]
+
     # First, determine the goalkeeper IDs for the home team
     for event_id, dict_event in dict_event_id_kinexon_path.items():
         if (
             "id_goalkeeper" not in dict_event
             or "competitor" not in dict_event
             or not "match_time" in dict_event
+            or dict_event["type"] not in relevant_event_types
         ):
             # remove events without goalkeeper or competitor from the list
             continue
@@ -157,10 +167,19 @@ def calc_attack_direction(dict_event_id_kinexon_path: dict) -> None:
     if not list_goalkeeper_positions_home:
         return
 
+    # remove nan values from list_goalkeeper_positions_home
+    list_goalkeeper_positions_home = [
+        x for x in list_goalkeeper_positions_home if str(x) != "nan"
+    ]
+
     avg_pos_home_goalkeeper = sum(list_goalkeeper_positions_home) / len(
         list_goalkeeper_positions_home
     )
     attack_direction = "right" if avg_pos_home_goalkeeper < 20 else "left"
+
+    print(
+        f'Attack direction of home team {dict_event["name_team_home"]}: {attack_direction}'
+    )
 
     for event_id, dict_event in dict_event_id_kinexon_path.items():
         if not "match_time" in dict_event or not "competitor" in dict_event:
@@ -189,6 +208,13 @@ def calc_attack_direction(dict_event_id_kinexon_path: dict) -> None:
             and dict_event["competitor"] == "away"
         ):
             dict_event["attack_direction"] = attack_direction
+
+            # check if team is TBV Stuttgart and switch attack direction
+            # if "name_team_home" in dict_event:
+            #     if dict_event["name_team_home"] == "TVB Stuttgart":
+            #         dict_event["attack_direction"] = (
+            #             "left" if attack_direction == "right" else "right"
+            #         )
 
 
 def insert_names_competitors(
@@ -234,8 +260,8 @@ def insert_player_ids(
                     dict_event["id_goalkeeper"] = player["id"]
 
         if "scorer" in dict_event:
-                dict_event["name_player"] = dict_event["scorer"]["name"]
-                dict_event["id_player"] = dict_event["scorer"]["id"]
+            dict_event["name_player"] = dict_event["scorer"]["name"]
+            dict_event["id_player"] = dict_event["scorer"]["id"]
 
 
 def calc_team_shot_efficiency(
@@ -257,20 +283,28 @@ def calc_team_shot_efficiency(
     df_sportradar = pd.DataFrame(dict_sportradar["timeline"])
 
     # Filter out irrelevant events
-    df_sportradar = df_sportradar[df_sportradar["type"].isin(relevant_event_types)]
+    df_sportradar = df_sportradar[
+        df_sportradar["type"].isin(relevant_event_types)
+    ]
 
     # Add a cumulative count of shots for each team (competitor), excluding the current event
-    df_sportradar["cumulative_shots"] = df_sportradar.groupby("competitor").cumcount()
+    df_sportradar["cumulative_shots"] = df_sportradar.groupby(
+        "competitor"
+    ).cumcount()
 
     # Add cumulative goals, but shift the count by one to exclude the current event
-    df_sportradar["cumulative_goals"] = df_sportradar.groupby("competitor")["type"].transform(
-        lambda x: (x == "score_change").shift(1).cumsum()
-    )
+    df_sportradar["cumulative_goals"] = df_sportradar.groupby("competitor")[
+        "type"
+    ].transform(lambda x: (x == "score_change").shift(1).cumsum())
 
     # Calculate cumulative shot efficiency for each event (up to the previous event)
     df_sportradar["shot_efficiency"] = df_sportradar.apply(
-        lambda row: row["cumulative_goals"] / row["cumulative_shots"]
-        if row["cumulative_shots"] > 0 else 0, axis=1
+        lambda row: (
+            row["cumulative_goals"] / row["cumulative_shots"]
+            if row["cumulative_shots"] > 0
+            else 0
+        ),
+        axis=1,
     )
 
     # Now assign the efficiency to each event in dict_event_id_kinexon_path
@@ -280,35 +314,43 @@ def calc_team_shot_efficiency(
         competitor = dict_event["competitor"]
 
         # Find the row corresponding to this event for the same competitor
-        df_competitor = df_sportradar[df_sportradar["competitor"] == competitor]
+        df_competitor = df_sportradar[
+            df_sportradar["competitor"] == competitor
+        ]
 
         # Get the shot efficiency up until this event (latest row)
         latest_event = df_competitor[df_competitor["id"] == event_id]
 
         # Assign shot efficiency to the current event in the dictionary
         if not latest_event.empty:
-            dict_event["shot_efficiency"] = latest_event["shot_efficiency"].values[0]
+            dict_event["shot_efficiency"] = latest_event[
+                "shot_efficiency"
+            ].values[0]
 
             if not np.isnan(latest_event["cumulative_shots"].values[0]):
-                dict_event["total_shots"] = int(latest_event["cumulative_shots"].values[0])
+                dict_event["total_shots"] = int(
+                    latest_event["cumulative_shots"].values[0]
+                )
             else:
                 dict_event["total_shots"] = None
 
             if not np.isnan(latest_event["cumulative_goals"].values[0]):
-                dict_event["total_goals"] = int(latest_event["cumulative_goals"].values[0])
+                dict_event["total_goals"] = int(
+                    latest_event["cumulative_goals"].values[0]
+                )
             else:
                 dict_event["total_goals"] = None
         else:
-            dict_event["shot_efficiency"] = None  # Handle cases where event_id is not found
+            dict_event["shot_efficiency"] = (
+                None  # Handle cases where event_id is not found
+            )
             dict_event["total_shots"] = None
             dict_event["total_goals"] = None
 
         # Print the result for debugging or logging purposes
-        print(
-            f"Event ID: {event_id} - Type: {dict_event['type']} - Competitor {competitor} shot efficiency: {dict_event['shot_efficiency']} ({dict_event['total_goals']} of {dict_event['total_shots']} shots)."
-        )
-
-
+        # print(
+        #     f"Event ID: {event_id} - Type: {dict_event['type']} - Competitor {competitor} shot efficiency: {dict_event['shot_efficiency']} ({dict_event['total_goals']} of {dict_event['total_shots']} shots)."
+        # )
 
 
 def calc_player_shot_efficiency(
@@ -334,28 +376,33 @@ def calc_player_shot_efficiency(
     ]
 
     # print unique player names
-    print(df_sportradar["name_player"].unique())
+    # print(df_sportradar["name_player"].unique())
 
     # Make sure the DataFrame index is properly set
     df_sportradar = df_sportradar.reset_index(drop=True)
 
     # Add a cumulative count of shots and goals for each player
     # Add a cumulative count of shots and goals for each player
-    df_sportradar["cumulative_shots_player"] = (
-        df_sportradar.groupby("id_player").cumcount()
-    )  # No "+1" to exclude the current event
-    df_sportradar["cumulative_goals_player"] = df_sportradar.groupby("id_player")[
-        "type"
-    ].transform(lambda x: (x == "score_change").shift(1).cumsum())
+    df_sportradar["cumulative_shots_player"] = df_sportradar.groupby(
+        "id_player"
+    ).cumcount()  # No "+1" to exclude the current event
+    df_sportradar["cumulative_goals_player"] = df_sportradar.groupby(
+        "id_player"
+    )["type"].transform(lambda x: (x == "score_change").shift(1).cumsum())
 
     # Calculate shot efficiency using past data only, but prevent division by zero
-    df_sportradar["shot_efficiency_player"] = df_sportradar["cumulative_shots_player"]
+    df_sportradar["shot_efficiency_player"] = df_sportradar[
+        "cumulative_shots_player"
+    ]
 
     df_sportradar["shot_efficiency_player"] = df_sportradar.apply(
-        lambda row: row["cumulative_goals_player"] / row["cumulative_shots_player"]
-        if row["cumulative_shots_player"] > 0 else 0, axis=1
+        lambda row: (
+            row["cumulative_goals_player"] / row["cumulative_shots_player"]
+            if row["cumulative_shots_player"] > 0
+            else 0
+        ),
+        axis=1,
     )
-
 
     # Now assign the efficiency to each event in dict_event_id_kinexon_path
     for event_id, dict_event in dict_event_id_kinexon_path.items():
@@ -377,16 +424,16 @@ def calc_player_shot_efficiency(
             ].values[0]
             if not np.isnan(latest_event["cumulative_shots_player"].values[0]):
                 # also total shots and goals
-                dict_event["total_shots_players"] = int(latest_event[
-                    "cumulative_shots_player"
-                ].values[0])
+                dict_event["total_shots_players"] = int(
+                    latest_event["cumulative_shots_player"].values[0]
+                )
             else:
                 dict_event["total_shots_player"] = None
 
             if not np.isnan(latest_event["cumulative_goals_player"].values[0]):
-                dict_event["total_goals_player"] = int(latest_event[
-                    "cumulative_goals_player"
-                ].values[0])
+                dict_event["total_goals_player"] = int(
+                    latest_event["cumulative_goals_player"].values[0]
+                )
             else:
                 dict_event["total_goals_player"] = None
         else:
@@ -396,9 +443,10 @@ def calc_player_shot_efficiency(
             dict_event["total_shots_player"] = None
             dict_event["total_goals_player"] = None
 
-        print(
-            f"Event ID: {event_id} - Type: {dict_event["type"]} -  Player {player_id} ({player_name}) shot efficiency: {dict_event['shot_efficiency_player']}"
-        )  # noqa
+        # print(
+        #     f"Event ID: {event_id} - Type: {dict_event["type"]} -  Player {player_id} ({player_name}) shot efficiency: {dict_event['shot_efficiency_player']}"
+        # )  # noqa
+
 
 def calc_goalkeeper_efficiency(
     dict_event_id_kinexon_path: dict, dict_sportradar: dict
@@ -423,29 +471,43 @@ def calc_goalkeeper_efficiency(
     ]
 
     # print unique goalkeeper names
-    print(df_sportradar["name_goalkeeper"].unique())
+    # print(df_sportradar["name_goalkeeper"].unique())
 
     # Make sure the DataFrame index is properly set
     df_sportradar = df_sportradar.reset_index(drop=True)
 
     # Add a cumulative count of shots saved and goals conceded for each goalkeeper
-    df_sportradar["cumulative_shots_saved"] = (
-        df_sportradar.groupby("id_goalkeeper").cumcount()
-    )  # No "+1" to exclude the current event
-    df_sportradar["cumulative_goals_conceded"] = df_sportradar.groupby("id_goalkeeper")[
-        "type"
-    ].transform(lambda x: (x == "score_change").shift(1).cumsum())
+    df_sportradar["cumulative_shots_saved"] = df_sportradar.groupby(
+        "id_goalkeeper"
+    ).cumcount()  # No "+1" to exclude the current event
+    df_sportradar["cumulative_goals_conceded"] = df_sportradar.groupby(
+        "id_goalkeeper"
+    )["type"].transform(lambda x: (x == "score_change").shift(1).cumsum())
 
     # Calculate goalkeeper efficiency using past data only
     df_sportradar["goalkeeper_efficiency"] = df_sportradar.apply(
-        lambda row: row["cumulative_shots_saved"] / (row["cumulative_shots_saved"] + row["cumulative_goals_conceded"])
-        if (row["cumulative_shots_saved"] + row["cumulative_goals_conceded"]) > 0 else 0, axis=1
+        lambda row: (
+            row["cumulative_shots_saved"]
+            / (
+                row["cumulative_shots_saved"]
+                + row["cumulative_goals_conceded"]
+            )
+            if (
+                row["cumulative_shots_saved"]
+                + row["cumulative_goals_conceded"]
+            )
+            > 0
+            else 0
+        ),
+        axis=1,
     )
-
 
     # Now assign the efficiency to each event in dict_event_id_kinexon_path
     for event_id, dict_event in dict_event_id_kinexon_path.items():
-        if "id_goalkeeper" not in dict_event or dict_event["id_goalkeeper"] is None:
+        if (
+            "id_goalkeeper" not in dict_event
+            or dict_event["id_goalkeeper"] is None
+        ):
             continue
         goalkeeper_id = dict_event["id_goalkeeper"]
         goalkeeper_name = dict_event["name_goalkeeper"]
@@ -465,16 +527,18 @@ def calc_goalkeeper_efficiency(
             ].values[0]
             if not np.isnan(latest_event["cumulative_shots_saved"].values[0]):
                 # also total shots saved and goals conceded
-                dict_event["total_shots_saved"] = int(latest_event[
-                    "cumulative_shots_saved"
-                ].values[0])
+                dict_event["total_shots_saved"] = int(
+                    latest_event["cumulative_shots_saved"].values[0]
+                )
             else:
                 dict_event["total_shots_saved"] = None
 
-            if not np.isnan(latest_event["cumulative_goals_conceded"].values[0]):
-                dict_event["total_goals_conceded"] = int(latest_event[
-                    "cumulative_goals_conceded"
-                ].values[0])
+            if not np.isnan(
+                latest_event["cumulative_goals_conceded"].values[0]
+            ):
+                dict_event["total_goals_conceded"] = int(
+                    latest_event["cumulative_goals_conceded"].values[0]
+                )
             else:
                 dict_event["total_goals_conceded"] = None
 
@@ -485,6 +549,6 @@ def calc_goalkeeper_efficiency(
             dict_event["total_shots_saved"] = None
             dict_event["total_goals_conceded"] = None
 
-        print(
-            f"Event ID: {event_id} - Type: {dict_event["type"]} -  Goalkeeper {goalkeeper_id} ({goalkeeper_name}) efficiency: {round(dict_event['goalkeeper_efficiency'],2)} with {dict_event['total_shots_saved']} shots saved and {dict_event['total_goals_conceded']} goals conceded."
-        )
+        # print(
+        #     f"Event ID: {event_id} - Type: {dict_event["type"]} -  Goalkeeper {goalkeeper_id} ({goalkeeper_name}) efficiency: {round(dict_event['goalkeeper_efficiency'],2)} with {dict_event['total_shots_saved']} shots saved and {dict_event['total_goals_conceded']} goals conceded."
+        # )

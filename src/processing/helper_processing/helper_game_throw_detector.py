@@ -5,6 +5,10 @@ from typing import Optional, Tuple, List
 import matplotlib.pyplot as plt
 import math
 
+import logging
+
+# logging.basicConfig(level=logging.ERROR)
+
 
 class ThrowEventDetector:
     def __init__(
@@ -31,7 +35,10 @@ class ThrowEventDetector:
         self.peaks = []
 
         if attack_direction not in ["left", "right"]:
-            print("Attack direction must be either 'left' or 'right'.")
+            logging.error(
+                "Error for event type: %s, attack direction must be either 'left' or 'right'.",
+                event_type,
+            )
 
         self.goal_position = (
             (40, 10) if attack_direction == "left" else (0, 10)
@@ -54,7 +61,7 @@ class ThrowEventDetector:
             return None
 
         self.data_kinexon_event["time"] = pd.to_datetime(
-            self.data_kinexon_event["time"], dayfirst=True
+            self.data_kinexon_event["time"], format="%Y-%m-%d %H:%M:%S.%f"
         )
 
         # Extract ball id
@@ -67,17 +74,20 @@ class ThrowEventDetector:
         if not id_ball.empty and self.id_player is not None:
             self.id_ball = id_ball.idxmax()
         else:
-            print(
-                f"! No ball (league_id does not contain 'Ball' or 'ball') found for event {self.event_type}: ❌"
+            logging.error(
+                "Error for event type: %s, no ball found in the event data.",
+                self.event_type,
             )
+
             # Check if field "number" contains 99 as it is the default value for the ball
             if self.data_kinexon_event["number"].eq(99).any():
                 self.id_ball = self.data_kinexon_event[
                     self.data_kinexon_event["number"] == 99
                 ]["league_id"].values[0]
             else:
-                print(
-                    f"! No ball (number is not 99) found for event {self.event_type}: ❌"
+                logging.error(
+                    "Error for event type: %s, no ball found in the event data.",
+                    self.event_type,
                 )
                 self.id_ball = None
             return None
@@ -96,6 +106,13 @@ class ThrowEventDetector:
             self._merge_player_and_ball_data()
         )
 
+        if self.data_kinexon_event_player_ball is None:
+            logging.error(
+                "Error for event type: %s, no player or ball found in the event data.",
+                self.event_type,
+            )
+            return None, None, None
+
         # Compute distances, speeds, and acceleration
         self._calculate_motion_features()
 
@@ -106,13 +123,21 @@ class ThrowEventDetector:
         self.peaks = self._clean_peaks(self.peaks)
 
         if len(self.peaks) == 0:
-            print(f"! No peaks found for event {self.event_type}: ❌")
+            logging.error(
+                "Error for event type: %s, no peaks found in the event data.",
+                self.event_type,
+            )
             return None, None, None
 
         self.event_time_throw = self.data_kinexon_event_player_ball[
             "time"
         ].iloc[self.peaks[-1]]
-        print(f"\t> Throw time: {self.event_time_throw}: ✅")
+        logging.info(
+            "Event type: %s, Throw time: %s",
+            self.event_type,
+            self.event_time_throw,
+        )
+
         return (
             self.event_time_throw,
             self.data_kinexon_event_player_ball,
@@ -126,9 +151,23 @@ class ThrowEventDetector:
             == self.id_player.split(":")[-1]
         ][["time", "pos_x", "pos_y"]]
 
+        if data_kinexon_event_player.empty:
+            logging.error(
+                "Error for event type: %s, no player found in the event data.",
+                self.event_type,
+            )
+            return None
+
         data_kinexon_event_ball = self.data_kinexon_event[
             self.data_kinexon_event["league_id"] == self.id_ball
         ][["time", "pos_x", "pos_y"]]
+
+        if data_kinexon_event_ball.empty:
+            logging.error(
+                "Error for event type: %s, no ball found in the event data.",
+                self.event_type,
+            )
+            return None
 
         # Merge the player and ball data
         return pd.merge_asof(

@@ -5,6 +5,10 @@ from configparser import ConfigParser
 import pandas as pd
 import warnings
 
+import logging
+
+# logging.basicConfig(level=logging.INFO)
+
 from src.processing.helper_processing.helper_game_processing import (
     add_missing_goalkeeper_to_events,
     add_scores_to_events,
@@ -75,6 +79,9 @@ class Game:
         """
         config = ConfigParser()
         config.read(config_path)
+        # check if the config file has a fields section
+        if "fields" not in config.sections():
+            config.read("../" + config_path)
         return {k: v for k, v in config.items("fields")}
 
     def _load_sportradar_json(self) -> Dict:
@@ -121,7 +128,9 @@ class Game:
             self.dict_sportradar["sport_event"]["venue"]["id"]
             == "sr:venue:2009"
         ):
-            print("Flensburg venue detected, adjusting y-coordinates.")
+            logging.warning(
+                "Flensburg venue detected, adjusting Y-coordinates with an offset of 12 meters."
+            )
             df_kinexon_cleaned["pos_y"] = df_kinexon_cleaned["pos_y"].apply(
                 lambda x: x - 12
             )
@@ -163,20 +172,33 @@ class Game:
                 event_match_end = dict_event
 
         if not event_match_start or not event_match_end:
-            print("Match start or end event not found.")
+            logging.error(
+                "Match start %s or end event %s not found.",
+                event_match_start,
+                event_match_end,
+            )
             return
 
         # prnt first raw time and last raw time
-        print(
-            f"First raw time: {self.df_kinexon['time'].iloc[0]} and last raw time: {self.df_kinexon['time'].iloc[-1]}"
+        logging.info(
+            "> Checking: Kinexon time range: First raw time: %s and last raw time: %s (duration: %s)",
+            self.df_kinexon["time"].iloc[0],
+            self.df_kinexon["time"].iloc[-1],
+            pd.to_datetime(
+                self.df_kinexon["time"].iloc[-1], format="%d.%m.%Y %H:%M:%S.%f"
+            )
+            - pd.to_datetime(
+                self.df_kinexon["time"].iloc[0], format="%d.%m.%Y %H:%M:%S.%f"
+            ),
         )
         # the first entry of the kinexon data should align with the match start event
+        # format of kinexon time: 2024-04-12 21:27:04.000
         kinexon_start_time = pd.to_datetime(
-            self.df_kinexon["time"].iloc[0], dayfirst=True
+            self.df_kinexon["time"].iloc[0], format="%d.%m.%Y %H:%M:%S.%f"
         )
         # the last entry of the kinexon data should align with the match end event
         kinexon_end_time = pd.to_datetime(
-            self.df_kinexon["time"].iloc[-1], dayfirst=True
+            self.df_kinexon["time"].iloc[-1], format="%d.%m.%Y %H:%M:%S.%f"
         )
 
         difference_match_start = kinexon_start_time - pd.to_datetime(
@@ -186,11 +208,17 @@ class Game:
             event_match_end["time"]
         ).replace(tzinfo=None)
 
-        print(
-            f"Difference between match start and kinexon start: {difference_match_start} with kinexon time: {kinexon_start_time} and event time: {pd.to_datetime(event_match_start['time']).replace(tzinfo=None)}"
+        logging.info(
+            "Checking: Time difference of first timestamps: Sportradar: %s <-> kinexon time: %s (Difference: %s)",
+            pd.to_datetime(event_match_start["time"]).replace(tzinfo=None),
+            kinexon_start_time,
+            difference_match_start,
         )
-        print(
-            f"Difference between match end and kinexon end: {difference_match_end} with kinexon time: {kinexon_end_time} and event time: {pd.to_datetime(event_match_end['time']).replace(tzinfo=None)}"
+        logging.info(
+            "Checking: Time difference of last timestamps: Sportradar: %s <-> kinexon time: %s (Difference: %s)",
+            pd.to_datetime(event_match_end["time"]).replace(tzinfo=None),
+            kinexon_end_time,
+            difference_match_end,
         )
         pass
 
@@ -222,7 +250,7 @@ class Game:
             event_time_start = event_time_tagged - pd.Timedelta(seconds=15)
             # Convert Kinexon timestamps to datetime objects
             self.df_kinexon["time"] = pd.to_datetime(
-                self.df_kinexon["time"], dayfirst=True
+                self.df_kinexon["time"], format="%d.%m.%Y %H:%M:%S.%f"
             )
 
             # Find the closest timestamps in the Kinexon data
@@ -238,12 +266,18 @@ class Game:
                 data_kinexon.to_csv(path_event, index=False)
                 dict_event["path_kinexon"] = path_event
             else:
-                print(f"\t>>> No snippet data found for event {event_id}.")
-
+                logging.warning(
+                    "No snippet data found for event %s.", event_id
+                )
             # Update the event-to-Kinexon path dictionary
             self.dict_kinexon_path_by_event_id[event_id] = dict_event
 
-        print(f">>> Saved Kinexon data for match {self.match_id}.")
+        logging.info(
+            "Game: %s, Number of events: %s, Number of snippets: %s",
+            self.match_id,
+            len(self.dict_sportradar["timeline"]),
+            len(self.dict_kinexon_path_by_event_id),
+        )
 
     def create_sportradar_event_from_events(self) -> None:
         """
@@ -255,14 +289,15 @@ class Game:
                 self.path_events, f"event_{event_id}_sportradar.json"
             )
             # Skip if the event file already exists
-            if os.path.exists(path_event):
-                continue
+            # if os.path.exists(path_event):
+            #     continue
 
             # Save the Sportradar event to a JSON file
             with open(path_event, "w", encoding="utf-8") as file:
                 json.dump(dict_event, file, ensure_ascii=False, indent=4)
-
-        print(f">>> Saved Sportradar data for match {self.match_id}.")
+        logging.info(
+            "Saved Sportradar event data for match %s.", self.match_id
+        )
 
     def process_additional_event_data(self):
         """
@@ -270,10 +305,11 @@ class Game:
         """
         add_missing_goalkeeper_to_events(self.dict_kinexon_path_by_event_id)
         add_scores_to_events(self.dict_kinexon_path_by_event_id)
-        calc_attack_direction(self.dict_kinexon_path_by_event_id)
         insert_names_competitors(
             self.dict_kinexon_path_by_event_id, self.dict_sportradar
         )
+        calc_attack_direction(self.dict_kinexon_path_by_event_id)
+
         insert_player_ids(
             self.dict_kinexon_path_by_event_id, self.dict_sportradar
         )

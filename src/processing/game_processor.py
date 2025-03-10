@@ -35,6 +35,7 @@ class GameProcessor:
         path_file_kinexon: str,
         render_events: bool = False,
         plot_syncing: bool = False,
+        overwrite: bool = False,
     ):
         """
         Initialize the GameProcessing object with paths to Sportradar and Kinexon data.
@@ -55,6 +56,12 @@ class GameProcessor:
         # initialize list of game events
         self.list_game_events = []
         # process game data
+        # check if the result file already exists
+        if os.path.exists(self.path_file_result) and not overwrite:
+            print(
+                f"Game features already processed for match ID: {self.game.match_id}"
+            )
+            return
         self.process_game()
         # Save the game events
         self.save_game_events()

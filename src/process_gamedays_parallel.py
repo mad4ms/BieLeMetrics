@@ -2,7 +2,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 # Define the range of gamedays from "01" to "07"
-gamedays = [f"{i:02}" for i in range(1, 21)]  # Creates ['01', '02', ..., '07']
+gamedays = [f"{i:02}" for i in range(1, 30)]  # Creates ['01', '02', ..., '07']
 
 
 # Function to run the process_gamedays.py script for a given gameday

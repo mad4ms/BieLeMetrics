@@ -73,19 +73,39 @@ def download_games_for_gameday(game_ids):
     # debug
     # download_game(game_ids[0])
     # return
+    max_workers = 15
 
-    with ThreadPoolExecutor(max_workers=len(game_ids)) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Create an iterator for game IDs
+        game_id_iter = iter(game_ids)
+
+        # Start with an initial batch of tasks
         futures = {
-            executor.submit(download_game_threaded, game_id): game_id
-            for game_id in game_ids
+            executor.submit(download_game_threaded, next(game_id_iter)): next(
+                game_id_iter
+            )
+            for _ in range(min(max_workers, len(game_ids)))
         }
 
-        for future in as_completed(futures):
-            game_id = futures[future]
-            try:
-                future.result()  # Raises any exceptions caught in the thread
-            except Exception as e:
-                print(f"Error downloading game {game_id}: {e}")
+        while futures:
+            # Process the completed futures as they finish
+            for future in as_completed(futures):
+                game_id = futures.pop(future)
+                try:
+                    future.result()  # Raises any exceptions caught in the thread
+                    print(f"Successfully downloaded game {game_id}")
+                except Exception as e:
+                    print(f"Error downloading game {game_id}: {e}")
+
+                # Submit a new task if there are remaining game IDs
+                try:
+                    new_game_id = next(game_id_iter)
+                    futures[
+                        executor.submit(download_game_threaded, new_game_id)
+                    ] = new_game_id
+                except StopIteration:
+                    # No more tasks to add
+                    break
 
 
 # Main function to manage parallel downloads for each game day
@@ -94,8 +114,6 @@ def run_parallel_downloads_by_gameday(file_path):
     grouped = df.groupby("Game Day")["ID"].apply(list).to_dict()
 
     for game_day, game_ids in grouped.items():
-        if game_day < 10:
-            continue
 
         print(f"Starting download for Game Day {game_day}")
         download_games_for_gameday(game_ids)
@@ -103,7 +121,16 @@ def run_parallel_downloads_by_gameday(file_path):
         # break
 
 
+def run_parallel_downloads(file_path):
+    df = load_game_data(file_path)
+    game_ids = df["ID"].tolist()
+
+    print(f"Starting download for all games")
+    download_games_for_gameday(game_ids)
+    print(f"Completed downloads for all games\n")
+
+
 if __name__ == "__main__":
     load_dotenv()
     file_path = "./games_23-24.csv"  # Path to your CSV file
-    run_parallel_downloads_by_gameday(file_path)
+    run_parallel_downloads(file_path)

@@ -1,0 +1,100 @@
+# Warning: DO NOT STORE API KEYS IN THIS FILE AS THEY MIGHT GET EXPOSED
+#          TO THE PUBLIC. USE ENVIRONMENT VARIABLES INSTEAD.
+
+# ETL pipeline settings
+etl:
+  path_raw: "data/raw/"
+  path_cut: "data/sync/"
+  path_silver: "data/silver/"
+  path_gold: "data/gold/"
+
+
+# Sportradar settings
+sportradar:
+  competition: "Bundesliga"
+  season: "24/25"
+  gender: "men"
+
+# Kinexon settings
+kinexon:
+  time_min: "2024-08-01"
+  time_max: "2025-06-30"
+  # THESE ARE MANUALLY EXTRACTED VIA THE KINEXON PORTAL
+  team_data:
+    - id: 32
+      name: "VfL Gummersbach"
+      abbreviation: "GUM"
+    - id: 2
+      name: "TV Bittenfeld"
+      abbreviation: "TVB"
+    - id: 8
+      name: "TSV Hannover-Burgdorf"
+      abbreviation: "HAN"
+    - id: 18
+      name: "THW Kiel"
+      abbreviation: "THW"
+    - id: 33
+      name: "ThSV Eisenach"
+      abbreviation: "EIS"
+    - id: 5
+      name: "TBV Lemgo Lippe"
+      abbreviation: "TBV"
+    - id: 12
+      name: "SG Flensburg-Handewitt"
+      abbreviation: "SGF"
+    - id: 16
+      name: "SC Magdeburg"
+      abbreviation: "SCM"
+    - id: 9
+      name: "SC DHfK Leipzig"
+      abbreviation: "LEI"
+    - id: 7
+      name: "Rhein-Neckar Löwen"
+      abbreviation: "RNL"
+    - id: 6
+      name: "MT Melsungen"
+      abbreviation: "MTM"
+    - id: 23
+      name: "HSV Hamburg"
+      abbreviation: "HSV"
+    - id: 3
+      name: "HSG Wetzlar"
+      abbreviation: "WET"
+    - id: 2
+      name: "HC Erlangen"
+      abbreviation: "HCE"
+    - id: 13
+      name: "Füchse Berlin"
+      abbreviation: "BER"
+    - id: 11
+      name: "Frisch Auf Göppingen"
+      abbreviation: "FAG"
+    - id: 36
+      name: "1. VfL Potsdam"
+      abbreviation: "POT"
+    - id: 35
+      name: "SG BBM Bietigheim"
+      abbreviation: "SGB"
+    - id: 17
+      name: "TVB Stuttgart"
+      abbreviation: "TVB"
+
+  mapping_column:
+    - "ts in ms" : "ts_epoch"
+    - "formatted local time" : "time"
+    - "sensor id" : "id_sensor"
+    - "mapped id" : "id_mapped"
+    - "number" : "player_number"
+    - "full name" : "player_name"
+    - "league id" : "id_league"
+    - "group id" : "id_group"
+    - "group name" : "group_name"
+    - "x in m" : "x"
+    - "y in m" : "y"
+    - "speed in m/s" : null
+    - "direction of movement in deg" : null
+    - "acceleration in m/s2" : null
+    - "total distance in m" : null
+    - "metabolic power in W/kg" : null
+    - "acceleration load" : null
+    - "Unnamed: 17" : null
