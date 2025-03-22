@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-
+import pandas as pd
 
 class TimelineEvent:
     """Represents a single event in a timeline, capturing details such as type, time, and related players."""
@@ -37,8 +37,17 @@ class TimelineEvent:
         self.id_str_assist: Optional[str] = None
         self.id_assist: Optional[int] = None
 
+        # Prepare attack direction
+        self.attack_direction: Optional[str] = None
+
         self._extract_player_info()
         self._convert_id_str_to_int()
+
+        # Convert time
+        if self.time:
+            self.time = pd.to_datetime(self.time).replace(tzinfo=None)
+            # add one hour
+            self.time = self.time + pd.Timedelta(hours=1)
 
     def _extract_player_info(self) -> None:
         """Extracts player information from the event data."""

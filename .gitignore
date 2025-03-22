@@ -164,4 +164,4 @@ cython_debug/
 data/
 assets/events/**
 *.ps1
-src/libs_external/**
+# src/libs_external/**

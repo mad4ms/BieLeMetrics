@@ -105,6 +105,24 @@ class DataClassGamePositions:
         self.id_match = event_info.id_match.split(":")[-1]
         self.gameday = event_info.gameday
         self.date_event = event_info.date_event
+        # set rest as well
+        self.event_info = event_info
+
+    def calc_attack_direction_for_halftime(self) -> None:
+        """
+        Add the attack direction for each half of the game.
+        """
+        # We are gonna calc this by clustering the goalkeeper position
+        # We assume that the goalkeeper is always in the half court of the team
+        # that he is defending.
+        list_goalkeeper_ids_home = []
+        for event in self.event_info.timeline:
+            # Check for home team
+            if event["team"] == self.competitor_away and event["match_clock"] == "00:00":
+                list_goalkeeper_ids_home.append(event["player_id"])
+
+            pass
+
 
     def add_additional_info(
         self,

@@ -73,7 +73,7 @@ def download_season_data():
     downloader_positions = DownloaderDataPositions()
     downloader_events = DownloaderDataEvents()
 
-    # Retrieve all game IDs in the season
+    # # Retrieve all game IDs in the season
     # game_ids = downloader_events.get_game_ids_of_season()
     # if not game_ids:
     #     logging.warning("No game IDs found for the season.")

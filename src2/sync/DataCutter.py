@@ -128,6 +128,8 @@ class DataCutter:
                         event.match_clock,
                     )
                     list_goalkeepers_home_ht1.append(str(event.id_goalkeeper))
+                    time_last_event = event.time
+
 
         # Collect goalkeeper positions and cluster them
         df_goalkeepers = data_positions.data_positions[
@@ -136,14 +138,42 @@ class DataCutter:
             )
         ]
         df_goalkeepers = df_goalkeepers[["id_league", "x", "y", "time"]]
+        # print first and last entry of time of df_goalkeepers
+        logging.info("First entry of goalkeeper data: %s", df_goalkeepers.head(1))
+        logging.info("Last entry of goalkeeper data: %s", df_goalkeepers.tail(1))
+        # remove rows after time of last event
+        df_goalkeepers = df_goalkeepers[
+            df_goalkeepers["time"] <= time_last_event
+        ]
 
-        print(df_goalkeepers)
+        # print(df_goalkeepers)
         # Determine by the average x-coordinate if the goalkeeper is left or right
         mean_x = df_goalkeepers["x"].mean()
         logging.info("Mean x-coordinate of goalkeepers: %.2f", mean_x)
         attack_direction = (
             "left" if df_goalkeepers["x"].mean() < 20 else "right"
         )
+        # add attack direction to events
+        for event in data_events.timeline.events:
+            if not event.match_clock:
+                continue
+            match_clock_minutes = int(event.match_clock.split(":")[0])
+            if match_clock_minutes < 30:
+                event.attack_direction = attack_direction
+            else:
+                event.attack_direction = "right" if attack_direction == "left" else "left"
+
+            # show
+            logging.info(
+                "Event %s: %s, %s at time %s, attack direction: %s",
+                event.type,
+                event.name_goalkeeper,
+                event.competitor,
+                event.match_clock,
+                event.attack_direction,
+            )
+
+
 
     def sync_data(self) -> None:
         """
@@ -162,7 +192,7 @@ class DataCutter:
 
         for json_file, csv_file in matching_files:
             logging.info(
-                "Processing file pair: JSON: %s, CSV: %s", json_file, csv_file
+                "Processing file pair:\nJSON: %s,\nCSV: %s", json_file, csv_file
             )
 
             events = DataClassGameEvents(json_file)
@@ -171,9 +201,8 @@ class DataCutter:
             self.calc_attack_direction(events, positions)
 
             for event in events.timeline.events:
-                event_time = pd.Timestamp(event.time).replace(
-                    tzinfo=None
-                ) + pd.Timedelta(hours=1)
+                event_time = event.time
+                
                 closest_time = self.find_closest_timestamp(
                     event_time, positions.data_positions
                 )
@@ -203,9 +232,15 @@ class DataCutter:
                 cut_positions = positions.data_positions[
                     (positions.data_positions["time"] >= cut_start_time)
                     & (positions.data_positions["time"] <= closest_time)
-                ]
+                ].copy()
+                # insert event id
+                cut_positions.loc[:, "event_id"] = event.id
 
-                output_dir = csv_file.replace(".csv", "").replace(
+                path_file = os.path.dirname(csv_file)
+                # Unify folder style
+                path_file = path_file.replace("\\", "/")
+
+                output_dir = csv_file.replace(".csv", "").replace("\\", "/").replace(
                     self.config["etl"]["path_raw"],
                     self.config["etl"]["path_cut"],
                 )

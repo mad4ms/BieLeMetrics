@@ -6,6 +6,8 @@ import json
 import logging
 from typing import Optional, Any, Dict, List
 
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../libs_external'))
 from sportradar import Handball
 from dotenv import load_dotenv
 
