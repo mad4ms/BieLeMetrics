@@ -1,0 +1,33 @@
+[project]
+name = "bielemetrics"
+version = "0.1.0"
+description = ""
+authors = []
+
+dependencies = [
+    "pyarrow",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "shapely",
+    "tqdm",
+    "python-dotenv",
+    "kinexon-handball-api",
+    "sportradar-datacore-api",
+    "duckdb>=1.4.1",
+    "plotly>=6.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.2"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+kinexon-handball-api = { path = "../KinexonHandballAPI" }
+sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
