@@ -3,6 +3,7 @@ name = "bielemetrics"
 version = "0.1.0"
 description = ""
 authors = []
+requires-python = ">=3.13"
 
 dependencies = [
     "pyarrow",
@@ -17,6 +18,7 @@ dependencies = [
     "sportradar-datacore-api",
     "duckdb>=1.4.1",
     "plotly>=6.4.0",
+    "opencv-python>=4.11.0.86",
 ]
 
 [project.optional-dependencies]
