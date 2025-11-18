@@ -22,6 +22,7 @@ dependencies = [
     "dagster>=1.12.2",
     "dagster-webserver>=1.12.2",
     "dagster-duckdb>=0.28.2",
+    "thefuzz>=0.22.1",
 ]
 
 [project.optional-dependencies]
