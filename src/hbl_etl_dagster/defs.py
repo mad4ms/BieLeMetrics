@@ -1,4 +1,4 @@
-from dagster import Definitions, mem_io_manager, fs_io_manager
+from dagster import Definitions, InMemoryIOManager, FilesystemIOManager
 from .assets import (
     competition_id,
     season_id,
@@ -12,6 +12,7 @@ from .assets import (
     kinexon_events,
     # kinexon_events_synced,
     sportradar_goals_synced,
+    sportradar_goals_refined,
     players_merged,
 )
 from .io_managers import duckdb_io_manager
@@ -31,13 +32,14 @@ defs = Definitions(
         kinexon_events,
         # kinexon_events_synced,
         sportradar_goals_synced,
+        sportradar_goals_refined,
         players_merged,
     ],
     resources={
         "io_manager": duckdb_io_manager.configured(
             {"db_path": "data/hbl.duckdb"}
         ),
-        "file_io_manager": fs_io_manager,
+        "file_io_manager": FilesystemIOManager(),
         "sportradar_api": sportradar_api,
         "kinexon_api": kinexon_api,
     },

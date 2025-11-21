@@ -510,11 +510,9 @@ def detect_throw_point(
     """
     Compute possession and throw point:
 
-      1) possession mask: (dist_pb <= d_possess) & (ball_speed <= v_possess_max)
-      2) last_possession_idx: last index where possession == True
-      3) search after last_possession_idx for local maximum in ball_acc → throw_idx
-         - if no peak: fallback to first idx where
-           (ball_speed >= v_release_min AND dist_pb >= d_release_min)
+      1) Identify all possession windows (dist_pb <= d_possess).
+      2) For the end of *each* possession window, define a 100ms search span (±50ms).
+      3) Determine the highest acceleration peak across all these spans.
 
     Returns metadata dict (indices, timestamps, method).
     """
@@ -529,46 +527,65 @@ def detect_throw_point(
     if df_pb.empty or len(df_pb) < MIN_SAMPLES:
         return out
 
-    # poss = (df_pb["dist_pb"] <= d_possess) & (
-    #     df_pb["ball_speed"].fillna(0) <= v_possess_max
-    # )
+    # 1. Possession mask
+    # We use distance threshold to define possession.
     poss = df_pb["dist_pb"] <= d_possess
 
-    if poss.any():
-        last_possession_idx = poss[poss].index.max()
-        out["last_possession_idx"] = int(
-            df_pb.index.get_indexer_for([last_possession_idx])[0]
-        )
-        post = df_pb.loc[df_pb.index - 5 >= last_possession_idx].copy()
-    else:
-        out["last_possession_idx"] = None
-        post = df_pb.copy()
-
-    if post.empty:
+    if not poss.any():
         return out
 
-    acc = post["ball_acc"].to_numpy(dtype=float)
-    peak_rel = first_local_maximum(acc, neigh=acc_peak_neigh)
-    if peak_rel is not None:
-        throw_row = post.iloc[peak_rel]
-        out["throw_idx"] = int(
-            df_pb.index.get_indexer_for([throw_row.name])[0]
-        )
-        out["throw_ts"] = throw_row["ts"]
-        out["method"] = "acc_peak"
+    # 2. Identify ends of ALL possession windows
+    # A row is an "end of possession" if it is True, and the next row is False (or it's the last row)
+    # We assume df_pb is sorted by time.
+    is_end_of_possession = poss & (~poss.shift(-1, fill_value=False))
+
+    # Get the timestamps of these ends
+    end_timestamps = df_pb.loc[is_end_of_possession, "ts"]
+
+    if end_timestamps.empty:
         return out
 
-    cond = (post["ball_speed"].fillna(0) >= v_release_min) & (
-        post["dist_pb"] >= d_release_min
+    # Set the "last_possession_idx" to the very last one found, for reference/plotting
+    last_ts_global = end_timestamps.iloc[-1]
+    last_poss_row = df_pb[df_pb["ts"] == last_ts_global].iloc[0]
+    out["last_possession_idx"] = int(
+        df_pb.index.get_indexer_for([last_poss_row.name])[0]
     )
-    if cond.any():
-        throw_row = post[cond].iloc[0]
-        out["throw_idx"] = int(
-            df_pb.index.get_indexer_for([throw_row.name])[0]
+
+    # 3. Build a search mask for ±50ms around EACH end timestamp
+    search_mask = pd.Series(False, index=df_pb.index)
+
+    for t_end in end_timestamps:
+        t_start_window = t_end - pd.Timedelta(milliseconds=50)
+        t_end_window = t_end + pd.Timedelta(milliseconds=50)
+
+        # Update mask to include this window
+        window_mask = (df_pb["ts"] >= t_start_window) & (
+            df_pb["ts"] <= t_end_window
         )
-        out["throw_ts"] = throw_row["ts"]
-        out["method"] = "speed_dist_fallback"
-        return out
+        search_mask |= window_mask
+
+    # 4. Filter data to these windows
+    candidates = df_pb[search_mask]
+
+    if candidates.empty:
+        # Fallback to the last possession row if windows are somehow empty
+        throw_row = last_poss_row
+        method = "last_possession_fallback_empty_window"
+    else:
+        # 5. Find max acceleration in the candidate windows
+        if candidates["ball_acc"].isna().all():
+            throw_row = last_poss_row
+            method = "last_possession_fallback_no_acc"
+        else:
+            # Find row with max ball_acc across all candidate windows
+            best_idx_label = candidates["ball_acc"].astype(float).idxmax()
+            throw_row = candidates.loc[best_idx_label]
+            method = "max_acc_in_possession_windows"
+
+    out["throw_idx"] = int(df_pb.index.get_indexer_for([throw_row.name])[0])
+    out["throw_ts"] = throw_row["ts"]
+    out["method"] = method
 
     return out
 
@@ -647,66 +664,56 @@ def plot_event_sync(
     if df_pb.empty:
         return
 
+    # --- Color Palette ---
+    C_ACC = "#4C72B0"  # Muted blue for acceleration
+    C_DIST = "#55A868"  # Muted green for distance
+    C_POSS = "#DDDDDD"  # Light grey for possession background
+    C_EVENT = "#1f77b4"  # Original blue for Sportradar event
+    C_KIN = "#ff7f0e"  # Original orange for Kinexon detection
+    C_THROW = "#d62728"  # Original red for refined throw
+
     x_ms = _ts_to_ms(df_pb["ts"])
     acc = df_pb["ball_acc"].to_numpy(dtype=float)
     dist = df_pb["dist_pb"].to_numpy(dtype=float)
-    spd = df_pb["ball_speed"].to_numpy(dtype=float)
 
     possess = df_pb["dist_pb"] <= d_possess
-
-    neigh = globals().get("ACC_PEAK_NEIGH", ACC_PEAK_NEIGH)
     start_idx = (last_possession_idx) if last_possession_idx is not None else 0
-    acc_post = acc[start_idx:]
-    rel_peaks = _find_local_maxima(acc_post, neigh=neigh)
-    peaks_idx = [start_idx + rp for rp in rel_peaks]
-    release_idx = peaks_idx[0] if len(peaks_idx) else None
 
     fig, axA = plt.subplots(figsize=(11.5, 5.2))
     axA.xaxis.set_major_formatter(FuncFormatter(_fmt_time_ms))
 
-    axA.plot(x_ms, acc, lw=1.6, label="Ball acceleration (m/s²)")
+    axA.plot(x_ms, acc, lw=1.6, label="Ball acceleration (m/s²)", color=C_ACC)
     axA.axhline(0, lw=1, color="0.7")
     axA.set_xlabel("Time (HH:MM:SS.mmm, UTC)")
     axA.set_ylabel("Acceleration (m/s²)")
 
     axD = axA.twinx()
-    axD.plot(x_ms, dist, ls="--", lw=1.6, label="Player-Ball distance (m)")
-    # try:
-    #     axD.plot(
-    #         x_ms,
-    #         spd,
-    #         ls="-.",
-    #         lw=1.0,
-    #         alpha=0.5,
-    #         label="Ball speed (m/s)",
-    #     )
-    # except Exception:
-    #     pass
+    axD.plot(
+        x_ms,
+        dist,
+        ls="--",
+        lw=1.6,
+        label="Player-Ball distance (m)",
+        color=C_DIST,
+    )
+
     axD.set_ylabel("Distance / Speed")
 
-    ymax = D_POSSESS
+    ymax = max(dist.max(), df_pb["ball_speed"].max()) * 1.1
     axD.fill_between(
         x_ms,
         0,
         ymax,
         where=possess.to_numpy(),
-        alpha=0.4,
+        alpha=0.6,
         label="Possession",
+        color=C_POSS,
     )
 
-    # if last_possession_idx is not None and last_possession_idx + 1 < len(x_ms):
-    #     axA.axvspan(
-    #         x_ms.iloc[last_possession_idx + 1],
-    #         x_ms.iloc[-1],
-    #         alpha=0.08,
-    #         color="#999999",
-    #         label="Post-possession search",
-    #     )
-
     markers = [
-        (event_ms, "Match eventTime", "#1f77b4"),
-        (kin_ms, "THROW FOUND", "#ff7f0e"),
-        # (throw_ms, "Refined throw", "#d62728"),
+        (event_ms, "Match eventTime", C_EVENT),
+        (kin_ms, "Kinexon Detection", C_KIN),
+        (throw_ms, "Refined throw", C_THROW),
     ]
     for ms, lab, col in markers:
         if ms is None:
@@ -717,23 +724,6 @@ def plot_event_sync(
         )
         y_here = np.nan_to_num(acc[idx], nan=0.0)
         _annot(axA, ms, y_here, lab, col)
-
-    # if len(peaks_idx):
-    #     axA.scatter(
-    #         x_ms.iloc[peaks_idx],
-    #         acc[peaks_idx],
-    #         s=28,
-    #         zorder=3,
-    #         label="Acc local maxima",
-    #     )
-    # if release_idx is not None:
-    #     axA.axvline(
-    #         x_ms.iloc[release_idx],
-    #         color="#d62728",
-    #         ls="--",
-    #         lw=2.0,
-    #         label="First peak (release)",
-    #     )
 
     if title:
         axA.set_title(title)
@@ -747,13 +737,13 @@ def plot_event_sync(
             seen.add(t)
             all_lines.append(h)
             all_labels.append(t)
-    axA.legend(all_lines, all_labels, loc="upper left", ncol=2, frameon=True)
+    axA.legend(all_lines, all_labels, loc="upper right", ncol=2, frameon=False)
 
     axA.grid(True, alpha=0.28)
     fig.tight_layout()
     # save
     plt.savefig(f"data/renders/event_sync_{event_row.get('eventId')}.png")
-    plt.show(block=False)
+    plt.show(block=True)
 
 
 # =============================================================================
@@ -1107,9 +1097,9 @@ def refine_throw_time_for_event(
     )
     diag["n_rows_window"] = int(len(df_scene))
 
-    print(
-        f"Refining throw time for eventId={row.get('teamName')} in fixtureId={row.get('personName')} with {len(df_scene)} position rows"
-    )
+    # print(
+    #     f"Refining throw time for eventId={row.get('teamName')} in fixtureId={row.get('personName')} with {len(df_scene)} position rows"
+    # )
     # print if kin_timestamp_ms is available and if it is in the timespan of df_scene
     print_kin_ts = False
     if "kin_timestamp_ms" in row and pd.notna(row.get("kin_timestamp_ms")):
@@ -1123,7 +1113,7 @@ def refine_throw_time_for_event(
             t_max = df_scene["ts"].max()
             if kin_ts >= t_min and kin_ts <= t_max:
                 print_kin_ts = True
-    if print_kin_ts:
+    if print_kin_ts and False:
         print(
             f"  Kinexon timestamp {diag['kin_timestamp']} is within position data range [{df_scene['ts'].min()} .. {df_scene['ts'].max()}], Possession window is {D_POSSESS} m, max speed {V_POSSESS_MAX} m/s"
         )

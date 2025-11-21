@@ -32,6 +32,7 @@ from src.events_kinexon.fetch_events_for_session import (
 
 
 from .utils.player_league_mapper import PlayerLeagueMapper
+from .utils.sportradar_kinexon_event_mapper import refine_throw_time_for_event
 
 # --------------------------------------------------------------------
 # Partitions
@@ -294,6 +295,9 @@ def fixture_events(
         "Fetches only missing sessions compared to the existing kinexon_positions table, "
         "streaming batches directly into DuckDB to avoid high RAM usage."
     ),
+    deps=[
+        "fixture_events",
+    ],  # ensure kinexon_positions runs first
 )
 def kinexon_positions(
     context: AssetExecutionContext,
@@ -311,9 +315,10 @@ def kinexon_positions(
     duckdb_io_manager = context.resources.io_manager
     api_kinexon = context.resources.kinexon_api
 
+    SKIP_STEP = True
+
     with duckdb_io_manager._conn() as con:
 
-        return None
         # Session IDs already present in positions (only the key column, small footprint)
         try:
             df_sessions_in_positions = con.execute(
@@ -365,17 +370,24 @@ def kinexon_positions(
             f"in {len(split_session_id_lists)} batches."
         )
 
-        # Reverse mapping: session_id -> fixtureId
+        # Reverse mapping: session_id -> fixtureId from fixtures
         session_to_fixture = {
             v: k
-            for k, v in session_ids.items()
-            if v in session_ids_in_fixtures
+            for k, v in fixtures.set_index("fixtureId")["session_id"]
+            .to_dict()
+            .items()
         }
 
         first_insert_done = False
 
         for session_id_list in split_session_id_lists:
             if not session_id_list:
+                continue
+
+            if SKIP_STEP:
+                context.log.info(
+                    f"SKIPPING fetch for session IDs: {session_id_list}"
+                )
                 continue
 
             df_positions = fetch_positions_for_fixtures_multithreaded(
@@ -487,6 +499,10 @@ def players_merged(
         # Fetch existing players table that was created in fixture_events asset
         df_players_all = con.execute("SELECT * FROM players").df()
 
+        context.log.info(
+            f"Starting player-league_id backfill for {len(df_players_all)} total players."
+        )
+
         # Iterate over each fixture from the events data
         for fixture_id, df_events_fixture in fixture_events.groupby(
             "fixtureId"
@@ -506,6 +522,10 @@ def players_merged(
             df_players_fixture = df_players_all[
                 df_players_all["personId"].isin(person_ids)
             ].copy()
+
+            context.log.info(
+                f"Fixture {fixture_id}: Found {len(df_players_fixture)} unique players in events."
+            )
 
             # Skip if no players to process
             if df_players_fixture.empty:
@@ -536,9 +556,9 @@ def players_merged(
                 continue
 
             if df_positions.empty:
-                context.log.warning(
-                    f"Fixture {fixture_id}: No Kinexon player data found for session {session_id}."
-                )
+                # context.log.warning(
+                #     f"Fixture {fixture_id}: No Kinexon player data found for session {session_id}."
+                # )
                 continue
 
             def fuzzy_match_players(
@@ -549,7 +569,12 @@ def players_merged(
                 from thefuzz import process
 
                 matched_rows = []
-                position_names = df_positions["full_name_kinexon"].tolist()
+                position_names = (
+                    df_positions["full_name_kinexon"].unique().tolist()
+                )
+                context.log.debug(
+                    f"Fixture {fixture_id}: Starting fuzzy matching for {len(df_players)} players against {len(position_names)} Kinexon positions."
+                )
                 position_groups = (
                     df_positions["group_name_kinexon"].unique().tolist()
                 )
@@ -581,16 +606,23 @@ def players_merged(
                 )
                 return pd.DataFrame(matched_rows)
 
+            context.log.info(
+                f"Fixture {fixture_id}: Performing fuzzy matching of players to Kinexon positions."
+            )
+
             df_players_matched = fuzzy_match_players(
                 df_players_fixture, df_positions
             )
             if df_players_matched.empty:
                 continue
 
-        players_merged.append(df_players_matched)
+            players_merged.append(df_players_matched)
     if players_merged:
         players_merged = pd.concat(players_merged).drop_duplicates(
             subset=["personId"]
+        )
+        context.log.info(
+            f"Total players matched across all fixtures: {len(players_merged)}"
         )
     else:
         players_merged = pd.DataFrame()
@@ -699,94 +731,6 @@ def kinexon_events(
     return df_all_detected_events
 
 
-# @asset(
-#     partitions_def=season_partitions,
-#     required_resource_keys={"io_manager"},
-#     group_name="kinexon_data",
-#     compute_kind="duckdb",
-#     description="Synchronizes Kinexon detected events with the nearest Kinexon position data.",
-# )
-# def kinexon_events_synced(
-#     context: AssetExecutionContext,
-#     kinexon_events: pd.DataFrame,
-#     fixture_events: pd.DataFrame,
-# ) -> pd.DataFrame:
-#     """
-#     Merges Kinexon events with their closest position data point in time.
-#     This mirrors the logic from the synchronization notebook.
-#     """
-#     df_kinexon_events = kinexon_events.copy()
-
-#     context.log.info(f"Synchronizing {len(fixture_events)} Sportradar events.")
-#     context.log.info(f"with {len(df_kinexon_events)} Kinexon events.")
-
-#     # 1. Prepare Sportradar goals
-#     df_sportradar_goals = fixture_events[
-#         fixture_events["eventType"] == "goal"
-#     ].copy()
-#     df_sportradar_goals["eventTime"] = pd.to_datetime(
-#         df_sportradar_goals["eventTime"], format="ISO8601", errors="coerce"
-#     )
-#     df_sportradar_goals["eventTime_ms"] = (
-#         df_sportradar_goals["eventTime"].astype("int64") // 1_000_000
-#     )
-#     df_sportradar_goals = df_sportradar_goals.sort_values(
-#         "eventTime_ms"
-#     ).dropna(subset=["eventTime_ms", "personId"])
-#     df_sportradar_goals["personId"] = df_sportradar_goals["personId"].astype(
-#         str
-#     )
-
-#     # Ensure correct types and sort for merge_asof
-#     df_kinexon_events["timestamp_ms"] = pd.to_numeric(
-#         df_kinexon_events["timestamp_ms"], errors="coerce"
-#     )
-
-#     df_kinexon_synced = df_kinexon_events.sort_values("timestamp_ms").copy()
-#     # The 'player_id' from Kinexon events corresponds to 'personId' from Sportradar
-#     df_kinexon_synced = df_kinexon_synced.rename(
-#         columns={"player_id": "personId"}
-#     )
-#     df_kinexon_synced["personId"] = df_kinexon_synced["personId"].astype(str)
-
-#     # 3. Perform the time-based merge
-#     # This finds the nearest Kinexon event for each goal, matching on player and time.
-#     df_synced_goals = pd.merge_asof(
-#         left=df_sportradar_goals,
-#         right=df_kinexon_synced,
-#         left_on="eventTime_ms",
-#         right_on="timestamp_ms",
-#         by="personId",  # Match goals to events from the same player
-#         direction="nearest",
-#         tolerance=30000,  # 30-second tolerance, as in the notebook
-#     )
-
-#     # Calculate the time difference for diagnostics
-#     df_synced_goals["time_diff_ms"] = (
-#         df_synced_goals["timestamp_ms"] - df_synced_goals["eventTime_ms"]
-#     )
-
-#     context.log.info(
-#         f"Synced {len(df_synced_goals)} goal events. "
-#         f"{df_synced_goals['timestamp_ms'].notna().sum()} goals had a Kinexon event within tolerance."
-#     )
-#     df_synced_goals_not_na = df_synced_goals[
-#         df_synced_goals["time_diff_ms"].notna()
-#     ]
-#     context.add_output_metadata(
-#         {
-#             "n_rows": len(df_synced_goals),
-#             "n_columns": df_synced_goals.shape[1],
-#             # "n_matched_goals": df_synced_goals["timestamp_ms"].notna().sum(),
-#             "preview": MetadataValue.md(
-#                 df_synced_goals_not_na.head(10).to_markdown(index=False)
-#             ),
-#         }
-#     )
-
-#     return df_synced_goals
-
-
 @asset(
     partitions_def=season_partitions,
     required_resource_keys={"io_manager"},
@@ -833,8 +777,19 @@ def sportradar_goals_synced(
     df_goals["fixtureId"] = df_goals["fixtureId"].astype(str)
     context.log.info(f"Prepared {len(df_goals)} goal events for matching.")
 
+    # insert goalkeeper_league_id via players_merged
+    player_league_map = (
+        players_merged[["personId", "kin_league_id"]]
+        .drop_duplicates()
+        .set_index("personId")["kin_league_id"]
+        .to_dict()
+    )
+    df_goals["goalkeeper_league_id"] = df_goals["goalKeeperId"].map(
+        player_league_map
+    )
+
     # 2. Prepare Kinexon events
-    df_kinexon = kinexon_events.copy()
+    df_kinexon_events = kinexon_events.copy()
 
     # insert fixture_id into df_kinexon from df_goals via session_id
     fixture_id_map = (
@@ -843,14 +798,20 @@ def sportradar_goals_synced(
         .set_index("session_id")["fixtureId"]
         .to_dict()
     )
-    df_kinexon["fixture_id"] = df_kinexon["session_id"].map(fixture_id_map)
-    df_kinexon["timestamp_ms"] = pd.to_numeric(
-        df_kinexon["timestamp_ms"], errors="coerce"
+    df_kinexon_events["fixture_id"] = df_kinexon_events["session_id"].map(
+        fixture_id_map
     )
-    df_kinexon = df_kinexon.dropna(subset=["timestamp_ms", "fixture_id"])
-    df_kinexon["fixture_id"] = df_kinexon["fixture_id"].astype(str)
+    df_kinexon_events["timestamp_ms"] = pd.to_numeric(
+        df_kinexon_events["timestamp_ms"], errors="coerce"
+    )
+    df_kinexon_events = df_kinexon_events.dropna(
+        subset=["timestamp_ms", "fixture_id"]
+    )
+    df_kinexon_events["fixture_id"] = df_kinexon_events["fixture_id"].astype(
+        str
+    )
     context.log.info(
-        f"Prepared {len(df_kinexon)} Kinexon events for matching."
+        f"Prepared {len(df_kinexon_events)} Kinexon events for matching."
     )
 
     # 3. Match goals to nearest Kinexon event within each fixture
@@ -860,7 +821,9 @@ def sportradar_goals_synced(
 
     for fixture_id, goals_grp in df_goals.groupby("fixtureId"):
         processed_fixtures += 1
-        kinexon_grp = df_kinexon[df_kinexon["fixture_id"] == fixture_id]
+        kinexon_grp = df_kinexon_events[
+            df_kinexon_events["fixture_id"] == fixture_id
+        ]
         if kinexon_grp.empty:
             context.log.debug(
                 f"No Kinexon events found for fixture_id {fixture_id}. Skipping."
@@ -964,3 +927,131 @@ def sportradar_goals_synced(
     )
 
     return df_final_synced
+
+
+@asset(
+    partitions_def=season_partitions,
+    required_resource_keys={"io_manager"},
+    group_name="synced_data",
+    compute_kind="duckdb",
+    description="Refines throw timestamps for synced Sportradar goals using Kinexon position data.",
+    deps=["kinexon_positions"],
+)
+def sportradar_goals_refined(
+    context: AssetExecutionContext,
+    sportradar_goals_synced: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Iterates over synced goals, fetches Kinexon positions per fixture,
+    and applies the throw-time refinement heuristic.
+    """
+    duckdb_io_manager = context.resources.io_manager
+
+    if sportradar_goals_synced.empty:
+        context.log.warning("Input sportradar_goals_synced is empty.")
+        return pd.DataFrame()
+
+    # We will collect the results here
+    refined_rows = []
+
+    # Group by fixture to process batchwise
+    for fixture_id, df_fixture_goals in sportradar_goals_synced.groupby(
+        "fixtureId"
+    ):
+        # cols class	eventId	eventTime	eventType	subType	attendance	entityId	personId	bib	name	position	scores	periodId	playId	clock	success	x	y	attackType	goalKeeperId	location	failureReason	emptyNet	fixtureId	teamName	personName	goalkeeperName	session_id	eventTime_ms	goalkeeper_league_id	kinexon_match_index	time_diff_ms	kin_timestamp	kin_timestamp_ms	kin_timezone_id	kin_game_clock	kin_period	kin_player_id	kin_distance	kin_speed_ball	kin_trajectory	kin_shot_position_x	kin_shot_position_y	kin_hit_position_y	kin_hit_position_z	kin_success	kin_shot_category	kin_goalkeeper_id	kin_shot_type	kin_assisting_player_id	kin_validated	kin_id	kin_event_type	kin_league_id	kin_session_id	kin_fixture_id
+        date_game = df_fixture_goals["eventTime"].iloc[0]
+        date_only = date_game.date() if pd.notna(date_game) else "unknown"
+        # uniques of teamName as string: xx_vs_yy
+        competitors = "_vs_".join(df_fixture_goals["teamName"].unique())
+        context.log.info(
+            f"Refining {len(df_fixture_goals)} goals for fixture {fixture_id} ({competitors}) on {date_only}"
+        )
+
+        # Fetch positions for this fixture
+        try:
+            with duckdb_io_manager._conn() as con:
+                df_positions = con.execute(
+                    f"SELECT * FROM kinexon_positions WHERE fixtureId = '{fixture_id}'"
+                ).df()
+        except Exception as e:
+            context.log.error(
+                f"Error fetching positions for fixture {fixture_id}: {e}"
+            )
+            df_positions = pd.DataFrame()
+
+        if df_positions.empty:
+            context.log.warning(
+                f"No positions found for fixture {fixture_id}. Skipping refinement."
+            )
+            continue
+            # context.log.warning(
+            #     f"No positions found for fixture {fixture_id}. Skipping refinement."
+            # )
+            # Append original rows without refinement
+            for _, row in df_fixture_goals.iterrows():
+                refined_rows.append(row)
+            continue
+
+        # Pre-process positions
+        if "ts" not in df_positions.columns:
+            if "ts in ms" in df_positions.columns:
+                df_positions["ts"] = pd.to_datetime(
+                    df_positions["ts in ms"],
+                    unit="ms",
+                    utc=True,
+                    errors="coerce",
+                )
+
+        # Build fixture_to_session map
+        fixture_to_session = {}
+        if "session_id" in df_positions.columns:
+            s_ids = df_positions["session_id"].dropna().unique()
+            if len(s_ids) > 0:
+                fixture_to_session[fixture_id] = s_ids[0]
+        else:
+            context.log.warning(
+                f"No session_id column in positions for fixture {fixture_id}."
+            )
+
+        # Apply refinement
+        for _, row in df_fixture_goals.iterrows():
+            try:
+                diag_series = refine_throw_time_for_event(
+                    row=row,
+                    df_positions_all=df_positions,
+                    fixture_to_session=fixture_to_session,
+                    plot=False,
+                )
+                # Merge diag_series into row
+                combined = pd.concat([row, diag_series])
+                # Remove duplicate index labels (keep last/refined)
+                combined = combined.loc[
+                    ~combined.index.duplicated(keep="last")
+                ]
+                refined_rows.append(combined)
+            except Exception as e:
+                context.log.error(
+                    f"Error refining event {row.get('eventId')}: {e}"
+                )
+                refined_rows.append(row)
+
+    if not refined_rows:
+        return pd.DataFrame()
+
+    df_refined = pd.DataFrame(refined_rows)
+
+    context.add_output_metadata(
+        {
+            "n_rows": len(df_refined),
+            "n_refined": (
+                int(df_refined["refined_throw_ts"].notna().sum())
+                if "refined_throw_ts" in df_refined.columns
+                else 0
+            ),
+            "preview": MetadataValue.md(
+                df_refined.head().to_markdown(index=False)
+            ),
+        }
+    )
+
+    return df_refined
