@@ -38,26 +38,39 @@ def refine_fixtures_data(fixtures_data: list) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Refined DataFrame with selected columns.
     """
-    columns_to_keep = [
-        "fixtureId",
-        "seasonId",
-        "fixtureNumber",
-        "nameLocal",
-        "nameLatin",
-        "startTimeLocal",
-        "startTimeUTC",
-        "roundNumber",
-        "competitors",
-        "externalId",
-    ]
+    # map of original keys -> snake_case column names
+    columns_to_keep = {
+        "fixtureId": "fixture_id",
+        "seasonId": "season_id",
+        "fixtureNumber": "fixture_number",
+        "nameLocal": "name_local",
+        "nameLatin": "name_latin",
+        "startTimeLocal": "start_time_local",
+        "startTimeUTC": "start_time_utc",
+        "roundNumber": "round_number",
+        "competitors": "competitors",
+        "externalId": "external_id",
+    }
     df_fixtures = pd.DataFrame()
 
     for fixture in fixtures_data:
-        df_fixture = pd.json_normalize(fixture)
-        # drop columns that are not in columns list
-        df_fixture = df_fixture[
-            [col for col in columns_to_keep if col in df_fixture.columns]
-        ]
+        try:
+            df_fixture = pd.json_normalize(fixture)
+        except NotImplementedError:
+            df_fixture = pd.DataFrame([fixture])
+        # drop columns that are not in columns list and rename selected columns
+        try:
+            available = [
+                col
+                for col in columns_to_keep.keys()
+                if col in df_fixture.columns
+            ]
+        except Exception:
+            available = []
+        if not available:
+            # nothing to add
+            continue
+        df_fixture = df_fixture[available].rename(columns=columns_to_keep)
         df_fixtures = pd.concat([df_fixtures, df_fixture], ignore_index=True)
 
     return df_fixtures
@@ -78,28 +91,33 @@ def expand_competitors_in_fixtures(
     Returns:
         pd.DataFrame: DataFrame with expanded competitors information.
     """
-    columns_to_keep_competitors = [
-        "entityId",
-        "isHome",
-        "draw",
-        "resultPlace",
-        "score",
-    ]
+    columns_to_keep_competitors = {
+        "entityId": "entity_id",
+        "isHome": "is_home",
+        "draw": "draw",
+        "resultPlace": "result_place",
+        "score": "score",
+    }
     fixtures_expanded = []
     for _, fixture in df_fixtures.iterrows():
         competitors = fixture["competitors"]
         competitors_expanded = pd.json_normalize(competitors)
-        competitors_expanded = competitors_expanded[
-            [
-                col
-                for col in columns_to_keep_competitors
-                if col in competitors_expanded.columns
-            ]
+        available = [
+            c
+            for c in columns_to_keep_competitors.keys()
+            if c in competitors_expanded.columns
         ]
+        competitors_expanded = competitors_expanded[available].rename(
+            columns=columns_to_keep_competitors
+        )
+
+        # Get name_full_local from teams dataframe
+        teams_for_merge = df_teams[["entity_id", "name_full_local"]]
+
         competitors_expanded = competitors_expanded.merge(
-            df_teams[["entityId", "nameFullLocal"]],
-            left_on="entityId",
-            right_on="entityId",
+            teams_for_merge,
+            left_on="entity_id",
+            right_on="entity_id",
             how="left",
         )
         # convert competitors_expanded to json and add to fixture
@@ -107,34 +125,34 @@ def expand_competitors_in_fixtures(
         fixture_dict["competitors"] = competitors_expanded.to_dict(
             orient="records"
         )
-        # insert entityId_home and entityId_away
-        fixture_dict["entityId_home"] = competitors_expanded[
-            competitors_expanded["isHome"] == True
-        ]["entityId"].values[0]
-        fixture_dict["entityId_away"] = competitors_expanded[
-            competitors_expanded["isHome"] == False
-        ]["entityId"].values[0]
+        # insert entity_id_home and entity_id_away
+        fixture_dict["entity_id_home"] = competitors_expanded[
+            competitors_expanded["is_home"] == True
+        ]["entity_id"].values[0]
+        fixture_dict["entity_id_away"] = competitors_expanded[
+            competitors_expanded["is_home"] == False
+        ]["entity_id"].values[0]
         # insert name_team_home and name_team_away
         fixture_dict["name_team_home"] = competitors_expanded[
-            competitors_expanded["isHome"] == True
-        ]["nameFullLocal"].values[0]
+            competitors_expanded["is_home"] == True
+        ]["name_full_local"].values[0]
         fixture_dict["name_team_away"] = competitors_expanded[
-            competitors_expanded["isHome"] == False
-        ]["nameFullLocal"].values[0]
+            competitors_expanded["is_home"] == False
+        ]["name_full_local"].values[0]
         # insert score_home and score_away
-        fixture_dict["score_home"] = competitors_expanded[
-            competitors_expanded["isHome"] == True
+        fixture_dict["result_score_home"] = competitors_expanded[
+            competitors_expanded["is_home"] == True
         ]["score"].values[0]
         fixture_dict["score_away"] = competitors_expanded[
-            competitors_expanded["isHome"] == False
+            competitors_expanded["is_home"] == False
         ]["score"].values[0]
         # insert resultPlace_home and resultPlace_away
-        fixture_dict["resultPlace_home"] = competitors_expanded[
-            competitors_expanded["isHome"] == True
-        ]["resultPlace"].values[0]
-        fixture_dict["resultPlace_away"] = competitors_expanded[
-            competitors_expanded["isHome"] == False
-        ]["resultPlace"].values[0]
+        fixture_dict["result_place_home"] = competitors_expanded[
+            competitors_expanded["is_home"] == True
+        ]["result_place"].values[0]
+        fixture_dict["result_place_away"] = competitors_expanded[
+            competitors_expanded["is_home"] == False
+        ]["result_place"].values[0]
         fixtures_expanded.append(fixture_dict)
     return pd.DataFrame(fixtures_expanded)
 
@@ -160,21 +178,21 @@ def calculate_standings(df_fixtures: pd.DataFrame) -> pd.DataFrame:
                 df_all_fixtures_in_season[col], errors="coerce"
             )
 
-    df_all_fixtures_in_season["startTimeUTC"] = pd.to_datetime(
+    df_all_fixtures_in_season["start_time_utc"] = pd.to_datetime(
         df_all_fixtures_in_season["startTimeUTC"], errors="coerce"
     )
 
-    sort_cols = ["startTimeUTC"]
-    if "fixtureNumber" in df_all_fixtures_in_season.columns:
-        sort_cols.append("fixtureNumber")
-    sort_cols.append("fixtureId")
+    sort_cols = ["start_time_utc"]
+    if "fixture_number" in df_all_fixtures_in_season.columns:
+        sort_cols.append("fixture_number")
+    sort_cols.append("fixture_id")
 
     df_all_fixtures_in_season = df_all_fixtures_in_season.sort_values(
         sort_cols
     ).reset_index(drop=True)
 
     # --- initialize standings state ---
-    team_id_cols = ["entityId_home", "entityId_away"]
+    team_id_cols = ["entity_id_home", "entity_id_away"]
     teams = pd.unique(
         pd.concat(
             [df_all_fixtures_in_season[c] for c in team_id_cols],
@@ -187,10 +205,10 @@ def calculate_standings(df_fixtures: pd.DataFrame) -> pd.DataFrame:
         "name_team_home" in df_all_fixtures_in_season.columns
         and "name_team_away" in df_all_fixtures_in_season.columns
     ):
-        home_names = df_all_fixtures_in_season.set_index("entityId_home")[
+        home_names = df_all_fixtures_in_season.set_index("entity_id_home")[
             "name_team_home"
         ]
-        away_names = df_all_fixtures_in_season.set_index("entityId_away")[
+        away_names = df_all_fixtures_in_season.set_index("entity_id_away")[
             "name_team_away"
         ]
         name_lookup = (
@@ -254,8 +272,8 @@ def calculate_standings(df_fixtures: pd.DataFrame) -> pd.DataFrame:
     ) = ([], [], [], [])
 
     for _, row in df_all_fixtures_in_season.iterrows():
-        home_id = row["entityId_home"]
-        away_id = row["entityId_away"]
+        home_id = row["entity_id_home"]
+        away_id = row["entity_id_away"]
         sh = row["score_home"]
         sa = row["score_away"]
 

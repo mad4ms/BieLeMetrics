@@ -14,9 +14,9 @@ def extract_person_ids_from_setup(df_match_events: pd.DataFrame) -> List[str]:
     """
     df_setup = df_match_events[
         (df_match_events.get("class") == "setup")
-        & (df_match_events.get("eventType") == "person")
+        & (df_match_events.get("event_type") == "person")
     ]
-    return df_setup["personId"].dropna().unique().tolist()
+    return df_setup["person_id"].dropna().unique().tolist()
 
 
 def fetch_players_by_ids(api, person_ids: List[str]) -> pd.DataFrame:
@@ -53,38 +53,57 @@ def enrich_and_filter_players(
         return pd.DataFrame()
 
     people_map = (
-        df_setup_events[["personId", "entityId", "teamName"]]
-        .dropna(subset=["personId"])
-        .drop_duplicates(subset=["personId"])
+        df_setup_events[["person_id", "entity_id", "team_name"]]
+        .dropna(subset=["person_id"])
+        .drop_duplicates(subset=["person_id"])
     )
+
+    # rename personId to person_id for merging
+    df_players = df_players.rename(columns={"personId": "person_id"})
 
     # validate one-to-one where possible but do not raise in production flow
     try:
         df_players = df_players.merge(
-            people_map, on="personId", how="left", validate="one_to_one"
+            people_map, on="person_id", how="left", validate="one_to_one"
         )
     except Exception:
         # fallback to left merge without validation if shapes don't match
-        df_players = df_players.merge(people_map, on="personId", how="left")
+        df_players = df_players.merge(people_map, on="person_id", how="left")
 
     columns_to_keep_player_list = [
         "dob",
-        "externalId",
+        "external_id",
         "images",
-        "nameFamilyLatin",
-        "nameFamilyLocal",
-        "nameFullLatin",
-        "nameFullLocal",
-        "nameGivenLatin",
-        "nameGivenLocal",
+        "name_family_latin",
+        "name_family_local",
+        "name_full_latin",
+        "name_full_local",
+        "name_given_latin",
+        "name_given_local",
         "nationality",
-        "personId",
+        "person_id",
         "additionalDetails.height",
         "additionalDetails.weight",
-        "teamName",
-        "entityId",
+        "team_name",
+        "entity_id",
         "league_id",
     ]
+    # rename height/weight columns
+    df_players = df_players.rename(
+        columns={
+            "additionalDetails.height": "height_cm",
+            "additionalDetails.weight": "weight_kg",
+            "person_id": "person_id",
+            "team_name": "team_name",
+            "entity_id": "entity_id",
+            "nameFullLocal": "name_full_local",
+            "nameFullLatin": "name_full_latin",
+            "nameGivenLocal": "name_given_local",
+            "nameGivenLatin": "name_given_latin",
+            "entityId": "entity_id",
+            "externalId": "external_id",
+        }
+    )
     cols = [c for c in columns_to_keep_player_list if c in df_players.columns]
     return df_players[cols].copy()
 

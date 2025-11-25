@@ -87,13 +87,13 @@ def fetch_session_ids_for_fixtures(
     teams_in_season = fetch_teams_for_season(api, season_year="2024-25")
 
     for _, row in df_fixtures.iterrows():
-        fixture_id = row.get("fixtureId")
+        fixture_id = row.get("fixture_id")
         competitors = row.get("competitors")
 
         if competitors is None:
             competitors = []
 
-        home_list = [comp for comp in competitors if comp.get("isHome")]
+        home_list = [comp for comp in competitors if comp.get("is_home")]
         if not home_list:
             logging.error("[%s] ✖ no home competitor", fixture_id)
             continue
@@ -130,9 +130,9 @@ def fetch_session_ids_for_fixtures(
                 similarity_score,
             )
 
-        start_local = pd.to_datetime(row.get("startTimeLocal"))
+        start_local = pd.to_datetime(row.get("start_time_local"))
         if pd.isna(start_local):
-            logging.info("[%s] ✖ startTimeLocal is NaT", fixture_id)
+            logging.info("[%s] ✖ start_time_local is NaT", fixture_id)
             continue
         date_game_start = start_local.replace(
             hour=0, minute=0, second=0, microsecond=0

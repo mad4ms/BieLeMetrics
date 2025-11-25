@@ -1049,7 +1049,7 @@ def refine_throw_time_for_event(
     Returns:
       pd.Series with diagnostics and refined_throw_ts(_ms), deltas, method, etc.
     """
-    fixture_id = row.get("fixtureId")
+    fixture_id = row.get("fixture_id")
     session_id = fixture_to_session.get(fixture_id)
     seed_ts = seed_time_from_row(row)
 
@@ -1060,14 +1060,22 @@ def refine_throw_time_for_event(
     elif "kin_league_id" in row and pd.notna(row.get("kin_league_id")):
         shooter_league_id = row["kin_league_id"]
 
+    # check if "ball" or "Ball" is in in shooter_league_id (invalid)
+    if (
+        shooter_league_id is not None
+        and isinstance(shooter_league_id, str)
+        and "ball" in shooter_league_id.lower()
+    ):
+        shooter_league_id = None
+
     diag = dict(
         fixtureId=fixture_id,
-        eventId=row.get("eventId"),
+        eventId=row.get("event_id"),
         seed_ts=seed_ts,
         seed_ms=(seed_ts.value // 10**6) if pd.notna(seed_ts) else None,
-        eventTime=row.get("eventTime"),
+        eventTime=row.get("event_time"),
         eventTime_ms=(
-            row.get("eventTime_ms") if "eventTime_ms" in row else None
+            row.get("event_time_ms") if "event_time_ms" in row else None
         ),
         kin_timestamp=None,
         kin_timestamp_ms=None,

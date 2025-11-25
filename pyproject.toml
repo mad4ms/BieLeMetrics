@@ -23,6 +23,7 @@ dependencies = [
     "dagster-webserver>=1.12.2",
     "dagster-duckdb>=0.28.2",
     "thefuzz>=0.22.1",
+    "seaborn>=0.13.2",
 ]
 
 [project.optional-dependencies]
@@ -37,3 +38,7 @@ build-backend = "setuptools.build_meta"
 [tool.uv.sources]
 kinexon-handball-api = { path = "../KinexonHandballAPI" }
 sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
+
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = ["relative-beyond-top-level", "E402"]
