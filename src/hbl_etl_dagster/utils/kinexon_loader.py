@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Dict, Any, List
 import logging
-from src.events_kinexon.fetch_positions_for_fixture import (
+from src.fetcher_kinexon.fetch_positions_for_fixture import (
     fetch_positions_for_fixture,
 )
 
@@ -76,7 +76,7 @@ def load_missing_positions(
     session_to_fixture = (
         fixtures.dropna(subset=["session_id"])
         .drop_duplicates(subset=["session_id"])
-        .set_index("session_id")["fixtureId"]
+        .set_index("session_id")["fixture_id"]
         .to_dict()
     )
 

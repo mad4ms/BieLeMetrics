@@ -5,11 +5,11 @@ from dagster import (
     MetadataValue,
 )
 import pandas as pd
-from src.events_kinexon.fetch_events_for_session import (
+from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
 
-from .assets_ids import fixtures_partition_def
+from .assets_sportradar_slow import fixtures_partition_def
 from .utils.metadata import preview_metadata
 from .utils.kinexon_loader import load_missing_positions
 
@@ -36,7 +36,7 @@ from .utils.kinexon_loader import load_missing_positions
 )
 def kinexon_positions(
     context: AssetExecutionContext,
-    list_fixtures: pd.DataFrame,
+    fixtures_sportradar: pd.DataFrame,
 ) -> None:
     """
     Load Kinexon positions for the current fixture partition.
@@ -46,7 +46,7 @@ def kinexon_positions(
 
     fixture_id = context.partition_key
 
-    df_fixtures = list_fixtures
+    df_fixtures = fixtures_sportradar
 
     # Filter fixtures for current partition
     df_fixtures["fixture_id"] = df_fixtures["fixture_id"].astype(str)
@@ -72,7 +72,7 @@ def kinexon_positions(
     skip_if_exists = (context.op_config or {}).get("skip_if_exists", True)
     with duckdb_io_manager._conn() as con:
         # Agent: Leave that in here as the download takes ages. Only human should remove that.
-        DEBUG_SKIP_LOAD = True
+        DEBUG_SKIP_LOAD = False
         if DEBUG_SKIP_LOAD:
             context.log.info(
                 "DEBUG_SKIP_LOAD is True; skipping load_missing_positions call."
@@ -131,7 +131,7 @@ def kinexon_positions(
 )
 def kinexon_events(
     context: AssetExecutionContext,
-    list_fixtures: pd.DataFrame,
+    fixtures_sportradar: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Fetches detected events (e.g. shots, passes) from Kinexon API for the current fixture.
@@ -140,7 +140,7 @@ def kinexon_events(
 
     fixture_id = context.partition_key
 
-    df_fixtures = list_fixtures
+    df_fixtures = fixtures_sportradar
 
     # Filter fixtures for current partition
     df_fixtures["fixture_id"] = df_fixtures["fixture_id"].astype(str)

@@ -4,7 +4,7 @@ from dagster import (
     MetadataValue,
 )
 import pandas as pd
-from .assets_ids import fixtures_partition_def
+from .assets_sportradar_slow import fixtures_partition_def
 from .utils.metadata import preview_metadata
 from .utils.matching import fuzzy_match_players_to_positions
 from .utils.time_sync import sync_goals_with_kinexon
@@ -22,15 +22,15 @@ from .utils.sportradar_kinexon_event_mapper import refine_throw_time_for_event
     ),
     deps=[
         "kinexon_positions",
-        "fixture_events_match",
-        "fixture_players",
+        "fixture_events_sportradar",
+        "fixture_players_sportradar",
     ],  # ensure kinexon_positions runs first
     metadata={"partition_column": "fixture_id"},
 )
 def players_merged(
     context: AssetExecutionContext,
-    fixture_events_match: pd.DataFrame,
-    fixture_players: pd.DataFrame,
+    fixture_events_sportradar: pd.DataFrame,
+    fixture_players_sportradar: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Asset wrapping the legacy notebook logic for player ↔ league mapping.
@@ -42,38 +42,40 @@ def players_merged(
     fixture_id = context.partition_key
 
     # Filter fixture_events_match for current partition
-    fixture_events_match["fixture_id"] = fixture_events_match[
+    fixture_events_sportradar["fixture_id"] = fixture_events_sportradar[
         "fixture_id"
     ].astype(str)
-    fixture_events_match = fixture_events_match[
-        fixture_events_match["fixture_id"] == fixture_id
+    fixture_events_sportradar = fixture_events_sportradar[
+        fixture_events_sportradar["fixture_id"] == fixture_id
     ]
 
     # Filter fixture_players for current partition
-    fixture_players["fixture_id"] = fixture_players["fixture_id"].astype(str)
-    fixture_players = fixture_players[
-        fixture_players["fixture_id"] == fixture_id
+    fixture_players_sportradar["fixture_id"] = fixture_players_sportradar[
+        "fixture_id"
+    ].astype(str)
+    fixture_players_sportradar = fixture_players_sportradar[
+        fixture_players_sportradar["fixture_id"] == fixture_id
     ]
 
     # there should be only one session_id in this fixture, get it
-    session_ids = fixture_events_match["session_id"].dropna().unique()
+    session_ids = fixture_events_sportradar["session_id"].dropna().unique()
     assert (
         len(session_ids) == 1
     ), f"Multiple or no session_ids found for fixture {fixture_id}"
     session_id = session_ids[0]
 
     # fixture_events is now partitioned, so it contains only events for this fixture
-    if fixture_events_match.empty:
+    if fixture_events_sportradar.empty:
         context.log.warning(
             f"No events for fixture {fixture_id}. Skipping player merge."
         )
         return pd.DataFrame()
 
-    df_players_fixture = fixture_players.copy()
+    df_players_fixture = fixture_players_sportradar.copy()
 
     with duckdb_io_manager._conn() as con:
         # Process the single fixture
-        df_events_fixture = fixture_events_match
+        df_events_fixture = fixture_events_sportradar
         person_ids = df_events_fixture["person_id"].dropna().unique().tolist()
         person_ids_fixture_player = (
             df_players_fixture["person_id"].dropna().unique().tolist()
@@ -82,7 +84,7 @@ def players_merged(
         missing_person_ids = set(person_ids_fixture_player) - set(person_ids)
         assert (
             not missing_person_ids
-        ), f"Missing person IDs in fixture_events_match: {missing_person_ids}"
+        ), f"Missing person IDs in fixture_events_sportradar: {missing_person_ids}"
 
         # Fetch unique player info from Kinexon positions for this session
         try:
@@ -165,36 +167,40 @@ def players_merged(
 )
 def sportradar_goals_synced(
     context: AssetExecutionContext,
-    list_fixtures: pd.DataFrame,
-    fixture_events_match: pd.DataFrame,
+    fixtures_sportradar: pd.DataFrame,
+    fixture_events_sportradar: pd.DataFrame,
     kinexon_events: pd.DataFrame,
     players_merged: pd.DataFrame,
 ) -> pd.DataFrame:
     """Match Sportradar goals to Kinexon timeline for a single fixture partition."""
 
     fixture_id = context.partition_key
-    fixture_events_match["fixture_id"] = fixture_events_match[
+    fixture_events_sportradar["fixture_id"] = fixture_events_sportradar[
         "fixture_id"
     ].astype(str)
-    fixture_events_match = fixture_events_match[
-        fixture_events_match["fixture_id"] == fixture_id
+    fixture_events_sportradar = fixture_events_sportradar[
+        fixture_events_sportradar["fixture_id"] == fixture_id
     ]
     kinexon_events["fixture_id"] = kinexon_events["fixture_id"].astype(str)
     kinexon_events = kinexon_events[kinexon_events["fixture_id"] == fixture_id]
     players_merged["fixture_id"] = players_merged["fixture_id"].astype(str)
     players_merged = players_merged[players_merged["fixture_id"] == fixture_id]
-    list_fixtures["fixture_id"] = list_fixtures["fixture_id"].astype(str)
-    fixture_info = list_fixtures[list_fixtures["fixture_id"] == fixture_id]
+    fixtures_sportradar["fixture_id"] = fixtures_sportradar[
+        "fixture_id"
+    ].astype(str)
+    fixture_info = fixtures_sportradar[
+        fixtures_sportradar["fixture_id"] == fixture_id
+    ]
 
     context.log.info(
         "Starting goal sync for fixture %s. Sportradar events: %d, Kinexon events: %d, Players merged: %d",
         fixture_id,
-        len(fixture_events_match),
+        len(fixture_events_sportradar),
         len(kinexon_events),
         len(players_merged),
     )
 
-    if fixture_events_match.empty or kinexon_events.empty:
+    if fixture_events_sportradar.empty or kinexon_events.empty:
         context.log.warning(
             f"One or both input DataFrames are empty for fixture {fixture_id}."
         )
@@ -202,11 +208,11 @@ def sportradar_goals_synced(
 
     # start_time is in fixture_events_match where event_type == 'fixture' and sub_type == 'start'
     start_time = (
-        fixture_events_match[
-            (fixture_events_match["event_type"] == "fixture")
-            & (fixture_events_match["sub_type"] == "start")
+        fixture_events_sportradar[
+            (fixture_events_sportradar["event_type"] == "fixture")
+            & (fixture_events_sportradar["sub_type"] == "start")
         ]["event_time"].iloc[0]
-        if not fixture_events_match.empty
+        if not fixture_events_sportradar.empty
         else None
     )
     start_time_kinexon = (
@@ -220,8 +226,8 @@ def sportradar_goals_synced(
         f"Fixture {fixture_id} start time: {start_time}"
         f", Kinexon start time: {start_time_kinexon}"
     )
-    df_goals = fixture_events_match[
-        fixture_events_match["event_type"] == "goal"
+    df_goals = fixture_events_sportradar[
+        fixture_events_sportradar["event_type"] == "goal"
     ].copy()
     if df_goals.empty:
         context.log.warning(
@@ -472,6 +478,77 @@ def sportradar_goals_refined(
             context.log.warning(
                 f"No session_id column in positions for fixture {f_id}."
             )
+
+        teams = df_fixture_goals["team_name"].unique().tolist()
+
+        # store goal_pos per team per period
+        goal_pos_map = {team: {1: None, 2: None} for team in teams}
+
+        for team in teams:
+
+            # --- goalkeeper ids for this team ---
+            goalkeeper_league_ids = (
+                df_fixture_goals.loc[
+                    df_fixture_goals["team_name"] == team,
+                    "goalkeeper_league_id",
+                ]
+                .dropna()
+                .unique()
+            )
+
+            # --- period 1 events for this team ---
+            df_events_p1_gk = df_fixture_goals[
+                (df_fixture_goals["period_id"] == 1)
+                & (df_fixture_goals["team_name"] == team)
+            ]
+
+            if df_events_p1_gk.empty or len(goalkeeper_league_ids) == 0:
+                last_event_p1 = None
+            else:
+                last_event_p1 = df_events_p1_gk.sort_values(
+                    "event_time_ms"
+                ).iloc[-1]
+
+            if last_event_p1 is not None:
+                split_ts_ms = int(last_event_p1["event_time_ms"])
+            else:
+                split_ts_ms = None
+
+            # --- build df_pos_period1 / df_pos_period2 ---
+            if split_ts_ms is not None:
+                df_pos_period1 = df_positions[
+                    df_positions["ts in ms"] <= split_ts_ms
+                ]
+                df_pos_period2 = df_positions[
+                    df_positions["ts in ms"] > split_ts_ms
+                ]
+            else:
+                df_pos_period1 = df_positions.head(0)
+                df_pos_period2 = df_positions.head(0)
+
+            # --- goalkeeper positions period 1 ---
+            df_gk = df_pos_period1[
+                df_pos_period1["league id"].isin(goalkeeper_league_ids)
+            ]
+            if not df_gk.empty:
+                median_x = df_gk["x in m"].median()
+                goal_pos_map[team][1] = 0 if median_x < 20 else 40
+
+            # --- goalkeeper positions period 2 ---
+            df_gk = df_pos_period2[
+                df_pos_period2["league id"].isin(goalkeeper_league_ids)
+            ]
+            if not df_gk.empty:
+                median_x = df_gk["x in m"].median()
+                goal_pos_map[team][2] = 0 if median_x < 20 else 40
+
+        # --- assign into df_fixture_goals ---
+        df_fixture_goals["goal_position"] = df_fixture_goals.apply(
+            lambda row: goal_pos_map.get(row["team_name"], {}).get(
+                row["period_id"], None
+            ),
+            axis=1,
+        )
 
         # Apply refinement
         for _, row in df_fixture_goals.iterrows():

@@ -11,9 +11,8 @@ from dagster import (
     DagsterRunStatus,
 )
 from .assets_sportradar import (
-    fixture_events_raw,
-    fixture_events_match,
-    fixture_players,
+    fixture_events_sportradar,
+    fixture_players_sportradar,
 )
 from .assets_kinexon import kinexon_positions, kinexon_events
 from .assets_sync import (
@@ -21,7 +20,7 @@ from .assets_sync import (
     sportradar_goals_synced,
     sportradar_goals_refined,
 )
-from .assets_ids import fixtures_partition_def
+from .assets_sportradar_slow import fixtures_partition_def
 
 
 FIXTURE_RUN_CONCURRENCY_LIMIT = int(
@@ -31,9 +30,8 @@ FIXTURE_RUN_CONCURRENCY_LIMIT = int(
 
 @sensor(
     asset_selection=AssetSelection.assets(
-        fixture_events_raw,
-        fixture_events_match,
-        fixture_players,
+        fixture_events_sportradar,
+        fixture_players_sportradar,
         kinexon_positions,
         kinexon_events,
         players_merged,

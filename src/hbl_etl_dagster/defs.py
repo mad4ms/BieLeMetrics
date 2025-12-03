@@ -6,16 +6,16 @@ from dagster import (
     multiprocess_executor,
 )
 
-from .assets_ids import competition_id, season_id, fixtures_partition_def
 from .assets_sportradar_slow import (
-    teams,
-    list_fixtures_raw,
-    list_fixtures,
+    competition_id,
+    season_id,
+    fixtures_partition_def,
+    teams_sportradar,
+    fixtures_sportradar,
 )
 from .assets_sportradar import (
-    fixture_events_raw,
-    fixture_events_match,
-    fixture_players,
+    fixture_events_sportradar,
+    fixture_players_sportradar,
 )
 from .assets_kinexon import kinexon_positions, kinexon_events
 from .assets_sync import (
@@ -24,7 +24,8 @@ from .assets_sync import (
     sportradar_goals_refined,
     positions_for_throw_time,
 )
-
+from .assets_feature import features_at_throw_time
+from .assets_ml import xg_model_training
 
 # from .assets_maintenance import backfill_player_league_ids
 
@@ -48,9 +49,8 @@ season_refresh_job = define_asset_job(
     selection=AssetSelection.assets(
         competition_id,
         season_id,
-        teams,
-        list_fixtures_raw,
-        list_fixtures,
+        teams_sportradar,
+        fixtures_sportradar,
     ),
     config=SEASON_DEFAULT_CONFIG,
 )
@@ -58,19 +58,20 @@ season_refresh_job = define_asset_job(
 fixture_backfill_job = define_asset_job(
     name="fixture_backfill_job",
     selection=AssetSelection.assets(
-        fixture_events_raw,
-        fixture_events_match,
-        fixture_players,
+        fixture_events_sportradar,
+        fixture_players_sportradar,
         kinexon_positions,
         kinexon_events,
         players_merged,
         sportradar_goals_synced,
         sportradar_goals_refined,
         positions_for_throw_time,
+        features_at_throw_time,
+        xg_model_training,
     ),
     partitions_def=fixtures_partition_def,
     executor_def=multiprocess_executor.configured(
-        {"max_concurrent": 4}  # e.g., 4 fixture partitions in flight
+        {"max_concurrent": 2}  # e.g., 4 fixture partitions in flight
     ),
 )  # noqa
 
@@ -78,19 +79,19 @@ defs = Definitions(
     assets=[
         competition_id,
         season_id,
-        teams,
-        list_fixtures_raw,
-        list_fixtures,
-        fixture_events_raw,
-        fixture_events_match,
-        fixture_players,
+        teams_sportradar,
+        fixtures_sportradar,
+        fixture_events_sportradar,
+        fixture_players_sportradar,
         kinexon_positions,
         kinexon_events,
         sportradar_goals_synced,
         sportradar_goals_refined,
         players_merged,
         positions_for_throw_time,
+        features_at_throw_time,
         # backfill_player_league_ids,
+        xg_model_training,
     ],
     jobs=[season_refresh_job, fixture_backfill_job],
     sensors=[fixture_sensor],
