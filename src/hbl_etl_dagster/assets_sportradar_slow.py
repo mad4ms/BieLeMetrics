@@ -51,7 +51,7 @@ def competition_id(context: AssetExecutionContext) -> str:
     config_schema={
         "season_year": Field(
             int,
-            default_value=2024,
+            default_value=2025,
             description="Season year to resolve via the Sportradar API.",
         ),
     },
@@ -96,6 +96,13 @@ def teams_sportradar(
     group_name="sportradar_data",
     compute_kind="duckdb",
     description="Raw fixture list for the configured season.",
+    config_schema={
+        "season_year": Field(
+            int,
+            default_value=2025,
+            description="Season year used in fixture processing.",
+        )
+    },
 )
 def fixtures_sportradar(
     context: AssetExecutionContext,
@@ -123,10 +130,13 @@ def fixtures_sportradar(
     expanded_fixtures = expand_competitors_in_fixtures(
         refined_fixtures, teams_sportradar
     )
+    season_year = context.op_config["season_year"]
+
     # Fetch Kinexon session IDs for fixtures from Kinexon API
     dict_session_ids = fetch_session_ids_for_fixtures(
         api=api_kinexon,
         df_fixtures=expanded_fixtures,
+        season_year=f"{season_year}-{str(season_year +1)[-2:]}",
     )
 
     # merge session IDs into expanded_fixtures

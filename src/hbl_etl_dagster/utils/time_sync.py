@@ -1,80 +1,120 @@
-import pandas as pd
+# time_sync.py
+from __future__ import annotations
+
+from typing import Optional, List
+
 import numpy as np
-from typing import Optional
+import pandas as pd
 
 
 def _merge_closest_time(
     goals: pd.DataFrame,
     kinexon: pd.DataFrame,
     tolerance_ms: int,
+    *,
+    goal_time_col: str = "event_time_ms",
+    kin_time_col: str = "timestamp_ms",
+    kin_prefix: str = "kin_",
 ) -> Optional[pd.DataFrame]:
     """
-    Helper to perform 1D time matching between two dataframes.
+    Row-preserving 1D time matching (nearest neighbor in time).
+
+    - Returns the same number of rows as `goals`.
+    - Adds:
+        - kinexon_match_index (int, -1 if unmatched)
+        - time_diff_ms (float, NaN if unmatched)  [signed: kin - goal]
+        - matched (bool)
+        - all kinexon columns prefixed with `kin_prefix` (NaN if unmatched)
+
+    If `goals` is empty, returns an empty DataFrame.
+    If `kinexon` is empty, returns `goals` with match metadata (no kin columns).
     """
-    if kinexon.empty or goals.empty:
-        return None
+    if goals is None or goals.empty:
+        return pd.DataFrame()
 
-    # Sort Kinexon by time
-    kinexon = kinexon.sort_values("timestamp_ms").reset_index(drop=True)
-    kinexon_times = kinexon["timestamp_ms"].to_numpy(dtype="int64")
-    goal_times = goals["event_time_ms"].to_numpy(dtype="int64")
+    out = goals.copy()
 
-    # Find insertion points
-    idx_right = np.searchsorted(kinexon_times, goal_times, side="left")
-    idx_left = (idx_right - 1).clip(min=0)
+    # Ensure goal times numeric
+    out[goal_time_col] = pd.to_numeric(out[goal_time_col], errors="coerce")
 
-    best_indices = []
-    best_deltas = []
+    if kinexon is None or kinexon.empty:
+        out["kinexon_match_index"] = -1
+        out["time_diff_ms"] = np.nan
+        out["matched"] = False
+        return out
 
-    len_kin = len(kinexon_times)
+    kin = kinexon.copy()
+    kin[kin_time_col] = pd.to_numeric(kin[kin_time_col], errors="coerce")
+    kin = kin.dropna(subset=[kin_time_col]).copy()
 
-    for i, goal_time in enumerate(goal_times):
-        best_idx, best_delta = -1, float("inf")
+    if kin.empty:
+        out["kinexon_match_index"] = -1
+        out["time_diff_ms"] = np.nan
+        out["matched"] = False
+        return out
 
-        r = idx_right[i]
-        l = idx_left[i]
+    # Sort Kinexon by time for deterministic behavior
+    kin = kin.sort_values(kin_time_col, kind="mergesort").reset_index(
+        drop=True
+    )
+    kin_times = kin[kin_time_col].to_numpy(dtype="int64")
 
-        # Check right
-        if r < len_kin:
-            delta = kinexon_times[r] - goal_time
-            if abs(delta) < abs(best_delta):
-                best_delta = delta
-                best_idx = r
+    goal_times = out[goal_time_col].to_numpy()
+    valid_goal_mask = ~np.isnan(goal_times)
 
-        # Check left
-        if l < len_kin:
-            delta = kinexon_times[l] - goal_time
-            if abs(delta) < abs(best_delta):
-                best_delta = delta
-                best_idx = l
+    # Default outputs: unmatched
+    match_idx = np.full(len(out), -1, dtype="int64")
+    time_diff = np.full(len(out), np.nan, dtype="float64")
 
-        if abs(best_delta) <= tolerance_ms:
-            best_indices.append(best_idx)
-            best_deltas.append(int(best_delta))
-        else:
-            best_indices.append(None)
-            best_deltas.append(None)
+    if valid_goal_mask.any():
+        gt = goal_times[valid_goal_mask].astype("int64")
 
-    matched = goals.copy()
-    matched["kinexon_match_index"] = best_indices
-    matched["time_diff_ms"] = best_deltas
+        idx_right = np.searchsorted(kin_times, gt, side="left")
+        idx_left = idx_right - 1
 
-    matched = matched.dropna(subset=["kinexon_match_index"])
-    if matched.empty:
-        return None
+        inf = np.iinfo(np.int64).max
+        delta_right = np.full(len(gt), inf, dtype="int64")
+        delta_left = np.full(len(gt), inf, dtype="int64")
 
-    matched["kinexon_match_index"] = matched["kinexon_match_index"].astype(int)
+        r_ok = idx_right < len(kin_times)
+        l_ok = idx_left >= 0
 
-    # Fetch kinexon rows
-    kinexon_subset = kinexon.iloc[matched["kinexon_match_index"]].add_prefix(
-        "kin_"
+        delta_right[r_ok] = kin_times[idx_right[r_ok]] - gt[r_ok]
+        delta_left[l_ok] = kin_times[idx_left[l_ok]] - gt[l_ok]
+
+        # Choose nearer; tie-break to LEFT (earlier kin timestamp) for determinism
+        choose_right = np.abs(delta_right) < np.abs(delta_left)
+        chosen = np.where(choose_right, idx_right, idx_left)
+        chosen_delta = np.where(choose_right, delta_right, delta_left)
+
+        within_tol = np.abs(chosen_delta) <= tolerance_ms
+        chosen = np.where(within_tol, chosen, -1)
+        chosen_delta = np.where(within_tol, chosen_delta, np.nan)
+
+        match_idx[valid_goal_mask] = chosen.astype("int64")
+        time_diff[valid_goal_mask] = chosen_delta.astype("float64")
+
+    out["kinexon_match_index"] = match_idx
+    out["time_diff_ms"] = time_diff
+    out["matched"] = match_idx != -1
+
+    # Attach kinexon columns (NaN for unmatched) with prefix
+    kin_pref = kin.add_prefix(kin_prefix)
+
+    kin_attached = pd.DataFrame(
+        np.nan,
+        index=range(len(out)),
+        columns=kin_pref.columns,
     )
 
+    matched_mask = match_idx != -1
+    if matched_mask.any():
+        kin_attached.loc[matched_mask] = kin_pref.iloc[
+            match_idx[matched_mask]
+        ].to_numpy()
+
     return pd.concat(
-        [
-            matched.reset_index(drop=True),
-            kinexon_subset.reset_index(drop=True),
-        ],
+        [out.reset_index(drop=True), kin_attached.reset_index(drop=True)],
         axis=1,
     )
 
@@ -83,61 +123,159 @@ def sync_goals_with_kinexon(
     df_events: pd.DataFrame,
     df_kinexon: pd.DataFrame,
     tolerance_ms: int = 30_000,
+    *,
+    goal_time_col: str = "event_time_ms",
+    kin_time_col: str = "timestamp_ms",
+    goal_player_col: str = "person_league_id",
+    kin_player_col: str = "league_id",
 ) -> pd.DataFrame:
     """
-    Match Sportradar goal events to nearest Kinexon events by fixture and timestamp.
-    Enforces strict player ID matching if 'person_league_id' and 'league_id' are present.
+    Row-preserving goal -> Kinexon sync for already fixture-filtered inputs.
 
-    Args:
-        df_events: Sportradar events DataFrame (must contain 'eventTime_ms', 'fixtureId').
-        df_kinexon: Kinexon events DataFrame (must contain 'timestamp_ms', 'fixture_id').
-        tolerance_ms: Maximum allowed time difference in milliseconds.
+    Strategy:
+    1) If player columns exist: try player-restricted time match first.
+    2) For rows still unmatched: fall back to time-only match against all Kinexon.
+    3) Always returns len(output) == len(df_events) (unless df_events is empty).
 
-    Returns:
-        DataFrame containing goals merged with the nearest Kinexon event data.
+    Adds a `match_mode` column:
+      - "player+time"
+      - "time_only"
+      - "time_only_fallback"
+      - "no_kinexon"
     """
-    if df_events.empty or df_kinexon.empty:
+    if df_events is None or df_events.empty:
         return pd.DataFrame()
 
-    all_synced_fixtures = []
+    if df_kinexon is None or df_kinexon.empty:
+        out = df_events.copy()
+        out["kinexon_match_index"] = -1
+        out["time_diff_ms"] = np.nan
+        out["matched"] = False
+        out["match_mode"] = "no_kinexon"
+        return out
 
-    # Ensure types for matching
-    df_events = df_events.copy()
-    df_kinexon = df_kinexon.copy()
+    ev = (
+        df_events.copy()
+        .reset_index(drop=False)
+        .rename(columns={"index": "__row"})
+    )
+    kin = df_kinexon.copy()
 
-    # Ensure fixture IDs are strings for consistent grouping
-    df_events["fixture_id"] = df_events["fixture_id"].astype(str)
-    df_kinexon["fixture_id"] = df_kinexon["fixture_id"].astype(str)
+    has_player_matching = (goal_player_col in ev.columns) and (
+        kin_player_col in kin.columns
+    )
 
-    for fixture_id, goals_grp in df_events.groupby("fixture_id"):
-        kinexon_grp = df_kinexon[df_kinexon["fixture_id"] == fixture_id]
-        if kinexon_grp.empty:
-            continue
+    # Fast path: no player matching available -> time-only for all rows
+    if not has_player_matching:
+        out = _merge_closest_time(
+            ev.drop(columns=["__row"]),
+            kin,
+            tolerance_ms,
+            goal_time_col=goal_time_col,
+            kin_time_col=kin_time_col,
+        )
+        out.insert(0, "__row", ev["__row"].to_numpy())
+        out["match_mode"] = np.where(out["matched"], "time_only", "time_only")
+        return (
+            out.sort_values("__row", kind="mergesort")
+            .drop(columns=["__row"])
+            .reset_index(drop=True)
+        )
 
-        # Strict matching by player if columns exist
-        if (
-            "person_league_id" in goals_grp.columns
-            and "league_id" in kinexon_grp.columns
-        ):
-            # Iterate over each player who scored
-            for league_id, player_goals in goals_grp.groupby(
-                "person_league_id"
-            ):
-                player_kinexon = kinexon_grp[
-                    kinexon_grp["league_id"] == league_id
-                ]
-                merged = _merge_closest_time(
-                    player_goals, player_kinexon, tolerance_ms
-                )
-                if merged is not None:
-                    all_synced_fixtures.append(merged)
+    parts: List[pd.DataFrame] = []
+
+    # groupby(dropna=False) to avoid silently dropping NaN player ids
+    for pid, goals_grp in ev.groupby(
+        goal_player_col, dropna=False, sort=False
+    ):
+        goals_base = goals_grp.drop(columns=["__row"]).reset_index(drop=True)
+
+        if pd.isna(pid):
+            # No shooter id -> time-only
+            merged = _merge_closest_time(
+                goals_base,
+                kin,
+                tolerance_ms,
+                goal_time_col=goal_time_col,
+                kin_time_col=kin_time_col,
+            )
+            merged["match_mode"] = np.where(
+                merged["matched"], "time_only", "time_only"
+            )
         else:
-            # Fallback: match purely by time within fixture (legacy behavior)
-            merged = _merge_closest_time(goals_grp, kinexon_grp, tolerance_ms)
-            if merged is not None:
-                all_synced_fixtures.append(merged)
+            kin_sub = kin[kin[kin_player_col] == pid]
+            if kin_sub.empty:
+                # No kinexon rows for this player -> time-only
+                merged = _merge_closest_time(
+                    goals_base,
+                    kin,
+                    tolerance_ms,
+                    goal_time_col=goal_time_col,
+                    kin_time_col=kin_time_col,
+                )
+                merged["match_mode"] = np.where(
+                    merged["matched"], "time_only", "time_only"
+                )
+            else:
+                # First pass: strict player+time
+                merged_player = _merge_closest_time(
+                    goals_base,
+                    kin_sub,
+                    tolerance_ms,
+                    goal_time_col=goal_time_col,
+                    kin_time_col=kin_time_col,
+                )
+                merged_player["match_mode"] = np.where(
+                    merged_player["matched"],
+                    "player+time",
+                    "time_only_fallback",
+                )
 
-    if not all_synced_fixtures:
-        return pd.DataFrame()
+                # Second pass: for unmatched rows, fall back to time-only on full kinexon
+                unmatched_mask = ~merged_player["matched"]
+                if unmatched_mask.any():
+                    fallback = _merge_closest_time(
+                        goals_base.loc[unmatched_mask].copy(),
+                        kin,
+                        tolerance_ms,
+                        goal_time_col=goal_time_col,
+                        kin_time_col=kin_time_col,
+                    )
+                    fallback["match_mode"] = np.where(
+                        fallback["matched"],
+                        "time_only_fallback",
+                        "time_only_fallback",
+                    )
 
-    return pd.concat(all_synced_fixtures, ignore_index=True)
+                    # Replace match-related columns for unmatched rows
+                    replace_cols = [
+                        "kinexon_match_index",
+                        "time_diff_ms",
+                        "matched",
+                    ] + [c for c in fallback.columns if c.startswith("kin_")]
+                    merged_player.loc[unmatched_mask, replace_cols] = fallback[
+                        replace_cols
+                    ].to_numpy()
+                    merged_player.loc[unmatched_mask, "match_mode"] = fallback[
+                        "match_mode"
+                    ].to_numpy()
+
+                merged = merged_player
+
+        merged.insert(0, "__row", goals_grp["__row"].to_numpy())
+        parts.append(merged)
+
+    out = pd.concat(parts, ignore_index=True)
+    out = (
+        out.sort_values("__row", kind="mergesort")
+        .drop(columns=["__row"])
+        .reset_index(drop=True)
+    )
+
+    # Hard invariant: row-preserving
+    if len(out) != len(df_events):
+        raise RuntimeError(
+            f"Row-count changed: in={len(df_events)} out={len(out)}"
+        )
+
+    return out

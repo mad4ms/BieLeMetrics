@@ -23,6 +23,7 @@ from .assets_sync import (
     sportradar_goals_synced,
     sportradar_goals_refined,
     positions_for_throw_time,
+    rendered_throw_videos_first5,
 )
 from .assets_feature import features_at_throw_time
 from .assets_ml import xg_model_training
@@ -38,7 +39,7 @@ SEASON_DEFAULT_CONFIG = {
     "ops": {
         "season_id": {
             "config": {
-                "season_year": 2024,
+                "season_year": 2025,
             }
         }
     }
@@ -67,6 +68,7 @@ fixture_backfill_job = define_asset_job(
         sportradar_goals_refined,
         positions_for_throw_time,
         features_at_throw_time,
+        rendered_throw_videos_first5,
         xg_model_training,
     ),
     partitions_def=fixtures_partition_def,
@@ -91,13 +93,14 @@ defs = Definitions(
         positions_for_throw_time,
         features_at_throw_time,
         # backfill_player_league_ids,
+        rendered_throw_videos_first5,
         xg_model_training,
     ],
     jobs=[season_refresh_job, fixture_backfill_job],
     sensors=[fixture_sensor],
     resources={
         "io_manager": duckdb_io_manager.configured(
-            {"db_path": "data/hbl.duckdb"}
+            {"db_path": "data/hbl2526.duckdb"}
         ),
         "file_io_manager": FilesystemIOManager(),
         "sportradar_api": sportradar_api,

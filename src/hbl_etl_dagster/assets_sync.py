@@ -1,4 +1,7 @@
 from dagster import (
+    Any,
+    Dict,
+    List,
     asset,
     AssetExecutionContext,
     MetadataValue,
@@ -594,6 +597,7 @@ def sportradar_goals_refined(
 def positions_for_throw_time(
     context: AssetExecutionContext,
     sportradar_goals_refined: pd.DataFrame,
+    fixtures_sportradar: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Filter kinexon_positions by throw timestamps for this fixture,
@@ -606,6 +610,12 @@ def positions_for_throw_time(
     df_goals = sportradar_goals_refined.copy()
     df_goals["fixture_id"] = df_goals["fixture_id"].astype(str)
     df_goals = df_goals[df_goals["fixture_id"] == fixture_id]
+
+    df_fixture_info = fixtures_sportradar.copy()
+    df_fixture_info["fixture_id"] = df_fixture_info["fixture_id"].astype(str)
+    df_fixture_info = df_fixture_info[
+        df_fixture_info["fixture_id"] == fixture_id
+    ]
 
     # Create timestamp-to-eventId mapping
     df_map = (
@@ -649,8 +659,20 @@ def positions_for_throw_time(
         return df_pos.head(0)
 
     context.log.info(
-        f"Returning {len(df_pos)} Kinexon positions for fixture {fixture_id}."
+        f"Returning {len(df_pos)} Kinexon positions for fixture {fixture_id} and home team {df_fixture_info['name_team_home'].iloc[0]}."
     )
+
+    # flensburg fix: y-axis has 12.5m offset
+    if (
+        not df_fixture_info.empty
+        and "name_team_home" in df_fixture_info.columns
+        and df_fixture_info["name_team_home"].iloc[0]
+        == "SG Flensburg-Handewitt"
+    ):
+        context.log.info(
+            f"Applying y-axis offset fix for fixture {fixture_id} (SG Flensburg-Handewitt home)."
+        )
+        df_pos["y in m"] = df_pos["y in m"] - 12.5
 
     # Merge eventId
     df_merged = df_pos.merge(df_map, on="ts in ms", how="left")
@@ -692,3 +714,215 @@ def positions_for_throw_time(
 
     context.add_output_metadata(metadata)
     return df_merged
+
+
+from .utils.goal_rendering import render_goal_with_multifreeze, OUT_DIR
+
+
+@asset(
+    partitions_def=fixtures_partition_def,
+    required_resource_keys={"io_manager"},
+    group_name="renders",
+    compute_kind="python",
+    description=(
+        "Render MP4 clips for the first five refined throw events of a fixture "
+        "using Kinexon positions and Sportradar metadata."
+    ),
+    deps=["positions_for_throw_time"],
+    metadata={"partition_column": "fixture_id"},
+)
+def rendered_throw_videos_first5(
+    context: AssetExecutionContext,
+    fixtures_sportradar: pd.DataFrame,
+    sportradar_goals_refined: pd.DataFrame,
+    positions_for_throw_time: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    For the current fixture partition:
+
+    1. Take refined goals that actually have a refined_throw_ts and a matching
+       entry in positions_for_throw_time.
+    2. Select the first five (by event_time).
+    3. Load kinexon_positions for this fixture from DuckDB.
+    4. For each goal, build freeze markers and call render_goal_with_multifreeze.
+    5. Return a small DataFrame listing rendered paths.
+    """
+    fixture_id = context.partition_key
+
+    # --- filter refined goals for this fixture ---
+    df_goals = sportradar_goals_refined.copy()
+    df_goals["fixture_id"] = df_goals["fixture_id"].astype(str)
+    df_goals = df_goals[df_goals["fixture_id"] == fixture_id]
+
+    if df_goals.empty:
+        context.log.warning(
+            f"No refined goals for fixture {fixture_id}. Nothing to render."
+        )
+        return df_goals.head(0)
+
+    df_fixture_info = fixtures_sportradar.copy()
+    df_fixture_info["fixture_id"] = df_fixture_info["fixture_id"].astype(str)
+    df_fixture_info = df_fixture_info[
+        df_fixture_info["fixture_id"] == fixture_id
+    ]
+
+    # --- restrict to events that actually have positions_for_throw_time rows ---
+    df_pos_throw = positions_for_throw_time.copy()
+    if "fixture_id" in df_pos_throw.columns:
+        df_pos_throw["fixture_id"] = df_pos_throw["fixture_id"].astype(str)
+        df_pos_throw = df_pos_throw[df_pos_throw["fixture_id"] == fixture_id]
+
+    if df_pos_throw.empty:
+        context.log.warning(
+            f"No positions_for_throw_time rows for fixture {fixture_id}. "
+            "Skipping rendering."
+        )
+        return df_goals.head(0)
+
+    if "event_id" in df_pos_throw.columns:
+        valid_event_ids = (
+            df_pos_throw["event_id"].dropna().drop_duplicates().tolist()
+        )
+        df_goals = df_goals[df_goals["event_id"].isin(valid_event_ids)]
+
+    # require refined_throw_ts
+    if "refined_throw_ts" in df_goals.columns:
+        df_goals = df_goals[df_goals["refined_throw_ts"].notna()]
+
+    if df_goals.empty:
+        context.log.warning(
+            f"No refined goals with usable throw timestamps for fixture {fixture_id}."
+        )
+        return df_goals.head(0)
+
+    # --- pick first five events (sorted by event_time, fallback to refined_throw_ts) ---
+    sort_cols = [
+        c for c in ["event_time", "refined_throw_ts"] if c in df_goals.columns
+    ]
+    if sort_cols:
+        df_goals = df_goals.sort_values(sort_cols)
+    df_goals = df_goals.head(5)
+
+    context.log.info(
+        f"Rendering {len(df_goals)} events for fixture {fixture_id}."
+    )
+
+    # --- load kinexon_positions once for this fixture ---
+    duckdb_io_manager = context.resources.io_manager
+    with duckdb_io_manager._conn() as con:
+        df_positions = con.execute(
+            f"SELECT * FROM kinexon_positions WHERE fixtureId = '{fixture_id}'"
+        ).df()
+
+    if df_positions.empty:
+        context.log.warning(
+            f"No kinexon_positions for fixture {fixture_id}. Cannot render clips."
+        )
+        return df_goals.head(0)
+
+    context.log.info(
+        f"Home team for fixture {fixture_id}: {df_fixture_info['name_team_home'].iloc[0]}"
+    )
+
+    # flensburg fix: y-axis has 12.5m offset
+    if (
+        not df_fixture_info.empty
+        and "name_team_home" in df_fixture_info.columns
+        and df_fixture_info["name_team_home"].iloc[0]
+        == "SG Flensburg-Handewitt"
+    ):
+        context.log.info(
+            f"Applying y-axis offset fix for fixture {fixture_id} (SG Flensburg-Handewitt home)."
+        )
+        df_positions["y in m"] = df_positions["y in m"] - 12.5
+
+    rendered_records: List[Dict[str, Any]] = []
+
+    for _, row in df_goals.iterrows():
+        event_id = row.get("event_id")
+        context.log.info(
+            f"Rendering event_id={event_id} for fixture {fixture_id}."
+        )
+
+        freeze_markers: List[Dict[str, Any]] = []
+
+        # Sportradar event time marker
+        if "event_time" in row and pd.notna(row["event_time"]):
+            freeze_markers.append(
+                {
+                    "name": "SR event_time",
+                    "ts": row["event_time"],
+                    "color": (0, 0, 255),  # red frame
+                    "seconds": 0.5,
+                }
+            )
+
+        # Kinexon original sync timestamp, if present
+        if "kin_timestamp" in row and pd.notna(row.get("kin_timestamp")):
+            freeze_markers.append(
+                {
+                    "name": "Kinexon sync",
+                    "ts": row["kin_timestamp"],
+                    "color": (0, 255, 255),  # yellow frame
+                    "seconds": 0.5,
+                }
+            )
+
+        # Refined throw time marker (primary)
+        if "refined_throw_ts" in row and pd.notna(row.get("refined_throw_ts")):
+            freeze_markers.append(
+                {
+                    "name": "Refined throw",
+                    "ts": row["refined_throw_ts"],
+                    "color": (0, 255, 0),  # green frame
+                    "seconds": 1.0,
+                }
+            )
+
+        if not freeze_markers:
+            context.log.warning(
+                f"Event {event_id}: no valid freeze markers, skipping."
+            )
+            continue
+
+        out_path = render_goal_with_multifreeze(
+            df_positions=df_positions,
+            row_goal=row,
+            freeze_markers=freeze_markers,
+        )
+
+        if out_path is None:
+            context.log.warning(
+                f"Rendering failed or skipped for event {event_id} in fixture {fixture_id}."
+            )
+            continue
+
+        rendered_records.append(
+            {
+                "fixture_id": fixture_id,
+                "event_id": event_id,
+                "video_path": str(out_path),
+                "preview_image_path": str(out_path.with_suffix(".png")),
+            }
+        )
+
+    if not rendered_records:
+        context.log.warning(
+            f"No renders were produced for fixture {fixture_id}."
+        )
+        return df_goals.head(0)
+
+    df_rendered = pd.DataFrame(rendered_records)
+
+    context.add_output_metadata(preview_metadata(df_rendered))
+    context.add_output_metadata(
+        {
+            "n_events_rendered": len(df_rendered),
+            "output_dir": str(OUT_DIR),
+            "events": ", ".join(
+                str(e) for e in df_rendered["event_id"].tolist()
+            ),
+        }
+    )
+
+    return df_rendered
