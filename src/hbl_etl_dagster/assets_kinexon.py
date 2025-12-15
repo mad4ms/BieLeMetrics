@@ -8,6 +8,7 @@ import pandas as pd
 from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
+from typing import Optional
 
 from .assets_sportradar_slow import fixtures_partition_def
 from .utils.metadata import preview_metadata
@@ -67,36 +68,33 @@ def kinexon_positions(
         )
         return None
 
-    max_batch_size = (context.op_config or {}).get("max_batch_size", 9)
-
     skip_if_exists = (context.op_config or {}).get("skip_if_exists", True)
-    with duckdb_io_manager._conn() as con:
-        # Agent: Leave that in here as the download takes ages. Only human should remove that.
-        DEBUG_SKIP_LOAD = False
-        if DEBUG_SKIP_LOAD:
-            context.log.info(
-                "DEBUG_SKIP_LOAD is True; skipping load_missing_positions call."
-            )
-            stats = {
-                "n_rows": 0,
-                "n_distinct_sessions": 0,
-                "n_existing_sessions_before": 0,
-                "n_sessions_in_fixtures": 0,
-                "n_sessions_fetched_this_run": 0,
-                "n_players_total": 0,
-                "n_groups_total": 0,
-                "preview_md": "*(load skipped in debug mode)*",
-            }
-        else:
-            # We pass just the single-row dataframe for this fixture
-            stats = load_missing_positions(
-                con=con,
-                fixtures=df_fixture,
-                api_kinexon=api_kinexon,
-                max_batch_size=max_batch_size,
-                logger=context.log,
-                skip_if_exists=skip_if_exists,
-            )
+
+    # Agent: Leave that in here as the download takes ages. Only human should remove that.
+    DEBUG_SKIP_LOAD = False
+    if DEBUG_SKIP_LOAD:
+        context.log.info(
+            "DEBUG_SKIP_LOAD is True; skipping load_missing_positions call."
+        )
+        stats = {
+            "n_rows": 0,
+            "n_distinct_sessions": 0,
+            "n_existing_sessions_before": 0,
+            "n_sessions_in_fixtures": 0,
+            "n_sessions_fetched_this_run": 0,
+            "n_players_total": 0,
+            "n_groups_total": 0,
+            "preview_md": "*(load skipped in debug mode)*",
+        }
+    else:
+        # We pass just the single-row dataframe for this fixture
+        stats = load_missing_positions(
+            conn_factory=duckdb_io_manager._conn,
+            df_fixture=df_fixture,
+            api_kinexon=api_kinexon,
+            logger=context.log,
+            skip_if_exists=skip_if_exists,
+        )
 
     context.log.info(
         "kinexon_positions stats: %s",
@@ -132,7 +130,7 @@ def kinexon_positions(
 def kinexon_events(
     context: AssetExecutionContext,
     fixtures_sportradar: pd.DataFrame,
-) -> pd.DataFrame:
+) -> Optional[pd.DataFrame]:
     """
     Fetches detected events (e.g. shots, passes) from Kinexon API for the current fixture.
     """
@@ -150,7 +148,7 @@ def kinexon_events(
         context.log.warning(
             f"Fixture {fixture_id} not found in fixtures asset."
         )
-        return pd.DataFrame()
+        return None
 
     # session_ids in kinexon_positions
     list_session_ids_in_positions = (
@@ -161,10 +159,11 @@ def kinexon_events(
         context.log.warning(
             f"No session_id for fixture {fixture_id}. Skipping events."
         )
-        return pd.DataFrame()
+        return None
 
     event_frames = []
     for session_id in list_session_ids_in_positions:
+        session_id = int(session_id)
         df_events = fetch_detected_events_for_session(
             api_kinexon,
             session_id,
@@ -182,12 +181,19 @@ def kinexon_events(
         context.log.warning(
             f"No detected events retrieved for fixture {fixture_id}."
         )
-        return pd.DataFrame()
+        return None
 
     df_all_detected_events = pd.concat(event_frames, ignore_index=True)
     context.log.info(
         f"Fetched {len(df_all_detected_events)} detected events for "
         f"{len(event_frames)} sessions."
     )
+
+    # cast column validated to bigint
+    if "validated" in df_all_detected_events.columns:
+        df_all_detected_events["validated"] = df_all_detected_events[
+            "validated"
+        ].astype("Int64")
+
     context.add_output_metadata(preview_metadata(df_all_detected_events))
     return df_all_detected_events

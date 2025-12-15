@@ -205,7 +205,12 @@ def render_goal_with_multifreeze(
                 cv2.circle(img_draw, (x_t, y_t), 3, c_t, -1, cv2.LINE_AA)
 
         for _, br in group[group["group id"] == 3].iterrows():
-            if not (pd.isna(br["prev_x"]) or pd.isna(br["prev_y"])):  # ball
+            if not (
+                pd.isna(br["prev_x"])
+                or pd.isna(br["prev_y"])
+                or pd.isna(br["x in m"])
+                or pd.isna(br["y in m"])
+            ):  # ball
                 x0 = int(br["prev_x"] * scale)
                 y0 = int(br["prev_y"] * scale)
                 x1 = int(br["x in m"] * scale)
@@ -251,8 +256,8 @@ def render_goal_with_multifreeze(
                     first_png_saved = True
 
                 for _ in range(m["frames"]):
-                    cv2.imshow("Render", img_draw)
-                    cv2.waitKey(2)
+                    # cv2.imshow("Render", img_draw)
+                    # cv2.waitKey(2)
                     writer.write(cv2.resize(img_draw, (width, height)))
                 m["done"] = True
                 any_frozen = True
@@ -263,11 +268,11 @@ def render_goal_with_multifreeze(
             cv2.imwrite(str(out_path_img), img_draw)
             first_png_saved = True
 
-        cv2.imshow("Render", img_draw)
-        key = cv2.waitKey(1)
-        if key == 27:  # ESC
-            print("⏹️ Rendering aborted by user.")
-            break
+        # cv2.imshow("Render", img_draw)
+        # key = cv2.waitKey(1)
+        # if key == 27:  # ESC
+        #     print("⏹️ Rendering aborted by user.")
+        #     break
         writer.write(cv2.resize(img_draw, (width, height)))
 
     writer.release()

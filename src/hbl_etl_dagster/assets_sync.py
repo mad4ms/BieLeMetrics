@@ -203,10 +203,8 @@ def sportradar_goals_synced(
         len(players_merged),
     )
 
-    if fixture_events_sportradar.empty or kinexon_events.empty:
-        context.log.warning(
-            f"One or both input DataFrames are empty for fixture {fixture_id}."
-        )
+    if fixture_events_sportradar.empty:
+        context.log.warning("No Sportradar events for fixture %s.", fixture_id)
         return pd.DataFrame()
 
     # start_time is in fixture_events_match where event_type == 'fixture' and sub_type == 'start'
@@ -239,7 +237,7 @@ def sportradar_goals_synced(
         return pd.DataFrame()
 
     df_goals["event_time"] = pd.to_datetime(
-        df_goals["event_time"], utc=True, errors="coerce"
+        df_goals["event_time"], format="ISO8601", utc=True, errors="coerce"
     )
     df_goals["event_time_ms"] = (
         df_goals["event_time"].astype("int64") // 1_000_000

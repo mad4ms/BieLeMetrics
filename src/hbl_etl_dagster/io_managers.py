@@ -126,17 +126,6 @@ class DuckDBIOManager(IOManager):
     def load_input(self, context):
         upstream_key = context.upstream_output.asset_key
         table_name = upstream_key.to_user_string().replace("/", "_")
-
-        pk_present = getattr(
-            context.upstream_output, "has_partition_key", False
-        )
-        if pk_present:
-            partition_key = getattr(
-                context.upstream_output, "partition_key", None
-            )
-        else:
-            partition_key = None
-
         with self._conn() as con:
             try:
                 return con.execute(f"SELECT * FROM {table_name}").fetch_df()

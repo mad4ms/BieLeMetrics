@@ -73,7 +73,7 @@ fixture_backfill_job = define_asset_job(
     ),
     partitions_def=fixtures_partition_def,
     executor_def=multiprocess_executor.configured(
-        {"max_concurrent": 2}  # e.g., 4 fixture partitions in flight
+        {"max_concurrent": 4}  # e.g., 8 fixture partitions in flight
     ),
 )  # noqa
 

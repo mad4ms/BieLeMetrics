@@ -98,18 +98,20 @@ def _merge_closest_time(
     out["time_diff_ms"] = time_diff
     out["matched"] = match_idx != -1
 
-    # Attach kinexon columns (NaN for unmatched) with prefix
+    # Attach kinexon columns (NA for unmatched) with prefix
     kin_pref = kin.add_prefix(kin_prefix)
 
+    kin_pref = kin.add_prefix(kin_prefix).convert_dtypes()
+
+    # Schema-first: correct dtypes from the start
     kin_attached = pd.DataFrame(
-        np.nan,
-        index=range(len(out)),
+        index=out.index,
         columns=kin_pref.columns,
-    )
+    ).astype(kin_pref.dtypes.to_dict())
 
     matched_mask = match_idx != -1
     if matched_mask.any():
-        kin_attached.loc[matched_mask] = kin_pref.iloc[
+        kin_attached.loc[matched_mask, :] = kin_pref.iloc[
             match_idx[matched_mask]
         ].to_numpy()
 
@@ -253,10 +255,11 @@ def sync_goals_with_kinexon(
                         "time_diff_ms",
                         "matched",
                     ] + [c for c in fallback.columns if c.startswith("kin_")]
-                    merged_player.loc[unmatched_mask, replace_cols] = fallback[
-                        replace_cols
-                    ].to_numpy()
-                    merged_player.loc[unmatched_mask, "match_mode"] = fallback[
+                    idx = merged_player.index[unmatched_mask]
+                    rhs = fallback[replace_cols].copy()
+                    rhs.index = idx
+                    merged_player.loc[idx, replace_cols] = rhs
+                    merged_player.loc[idx, "match_mode"] = fallback[
                         "match_mode"
                     ].to_numpy()
 

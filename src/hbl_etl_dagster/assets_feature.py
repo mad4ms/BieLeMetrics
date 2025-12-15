@@ -187,12 +187,15 @@ def features_at_throw_time(
 
         positions_at_event = positions_by_ts.get(event_time, pd.DataFrame())
         if positions_at_event.empty:
+            skipped_events += 1
             context.log.debug(
-                "No positions found at throw time %s for fixture %s.",
+                "No positions found at throw time %s for fixture %s. Skipped %s of %s.",
                 event_time,
                 fixture_id,
+                skipped_events,
+                total_events,
             )
-            skipped_events += 1
+
             continue
 
         kin_distance = event.get("kin_distance")

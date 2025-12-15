@@ -1,7 +1,7 @@
 """fetch_session_id_for_fixtures.py: Module to fetch session IDs for fixtures from Kinexon API."""
 
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
 from typing import Tuple
@@ -28,6 +28,8 @@ def find_best_team_match(
 
 
 def _rename_teams_on_mismatch(name_team_home: str) -> str:
+    if "Minden" in name_team_home:
+        return "TSV GWD Minden"
     return (
         "HSV Hamburg"
         if name_team_home == "Handball Sport Verein Hamburg"
@@ -71,6 +73,7 @@ def fetch_session_ids_for_fixtures(
     df_fixtures: pd.DataFrame,
     similarity_threshold: float = 0.8,
     season_year: str = "2024-25",
+    logger: Optional[logging.Logger] = None,
 ) -> Dict[str, str]:
     """
     Fetch session IDs for a list of fixture IDs from the Kinexon Handball API.
@@ -83,7 +86,7 @@ def fetch_session_ids_for_fixtures(
         Dict[str, str]: A dictionary mapping fixture IDs to session IDs.
     """
     session_ids = {}
-    logging.info("Fetching session IDs for %d fixtures.", len(df_fixtures))
+    logger.info("Fetching session IDs for %d fixtures.", len(df_fixtures))
 
     teams_in_season = fetch_teams_for_season(api, season_year=season_year)
 
@@ -96,14 +99,14 @@ def fetch_session_ids_for_fixtures(
 
         home_list = [comp for comp in competitors if comp.get("is_home")]
         if not home_list:
-            logging.error("[%s] ✖ no home competitor", fixture_id)
+            logger.error("[%s] ✖ no home competitor", fixture_id)
             continue
 
         name_team_home = row.get("name_team_home") or home_list[0].get(
             "nameFullLocal"
         )
         if not name_team_home:
-            logging.error("[%s] ✖ missing home team name", fixture_id)
+            logger.error("[%s] ✖ missing home team name", fixture_id)
             continue
 
         name_team_home = _rename_teams_on_mismatch(name_team_home)
@@ -113,7 +116,7 @@ def fetch_session_ids_for_fixtures(
         )
 
         if id_team_home is None:
-            logging.info(
+            logger.info(
                 "[%s] ✖ team '%s' not found in ids_team (best similarity < %.2f)",
                 fixture_id,
                 name_team_home,
@@ -123,7 +126,7 @@ def fetch_session_ids_for_fixtures(
             continue
 
         if matched_name != name_team_home:
-            logging.info(
+            logger.info(
                 "[%s] ≈ fuzzy matched '%s' → '%s' (similarity: %.2f)",
                 fixture_id,
                 name_team_home,
@@ -133,7 +136,15 @@ def fetch_session_ids_for_fixtures(
 
         start_local = pd.to_datetime(row.get("start_time_local"))
         if pd.isna(start_local):
-            logging.info("[%s] ✖ start_time_local is NaT", fixture_id)
+            logger.info("[%s] ✖ start_time_local is NaT", fixture_id)
+            continue
+        # check if in future
+        if start_local > pd.Timestamp.now(tz=start_local.tz):
+            logger.debug(
+                "[%s] ✖ fixture start_time_local %s is in the future",
+                fixture_id,
+                start_local,
+            )
             continue
         date_game_start = start_local.replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -141,7 +152,7 @@ def fetch_session_ids_for_fixtures(
         date_game_end = date_game_start.date() + pd.Timedelta(hours=24)
         dt_start = datetime.datetime.fromisoformat(str(date_game_start))
         dt_end = datetime.datetime.fromisoformat(str(date_game_end))
-        logging.info(
+        logger.debug(
             "Fetching sessions for team ID %s (Name: %s) at %s to %s",
             id_team_home,
             name_team_home,
@@ -152,7 +163,7 @@ def fetch_session_ids_for_fixtures(
             id_team_home, start=dt_start, end=dt_end
         )
         if len(sessions) == 0:
-            logging.info(
+            logger.info(
                 "[%s] ✖ no sessions on %s for '%s'",
                 fixture_id,
                 date_game_start.date(),
@@ -192,6 +203,6 @@ def fetch_session_ids_for_fixtures(
                 session_ids[fixture_id] = sid
 
         if not found:
-            logging.info("[%s] ✖ no matching session found", fixture_id)
+            logger.info("[%s] ✖ no matching session found", fixture_id)
 
     return session_ids

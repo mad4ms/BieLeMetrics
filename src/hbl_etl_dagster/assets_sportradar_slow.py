@@ -137,6 +137,7 @@ def fixtures_sportradar(
         api=api_kinexon,
         df_fixtures=expanded_fixtures,
         season_year=f"{season_year}-{str(season_year +1)[-2:]}",
+        logger=context.log,
     )
 
     # merge session IDs into expanded_fixtures
@@ -151,6 +152,15 @@ def fixtures_sportradar(
     expanded_fixtures = expanded_fixtures.sort_values(
         by=["start_time_local", "round_number"]
     ).reset_index(drop=True)
+
+    # remove entries from future fixtures
+    expanded_fixtures["start_time_local"] = pd.to_datetime(
+        expanded_fixtures.get("start_time_local"), utc=True
+    )
+    now_utc = pd.Timestamp.now(tz="UTC")
+    expanded_fixtures = expanded_fixtures[
+        expanded_fixtures["start_time_local"] <= now_utc
+    ].reset_index(drop=True)
 
     # Register dynamic partitions for fixtures
     context.instance.add_dynamic_partitions(
