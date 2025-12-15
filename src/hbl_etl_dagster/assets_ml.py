@@ -9,7 +9,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
+from sklearn.metrics import (
+    roc_auc_score,
+    log_loss,
+    accuracy_score,
+    brier_score_loss,
+)
 
 from .assets_sportradar_slow import (
     fixtures_partition_def,
@@ -152,13 +157,15 @@ def xg_model_training(
         "val_auc": float(roc_auc_score(y_val, y_val_proba)),
         "val_logloss": float(log_loss(y_val, y_val_proba)),
         "val_accuracy": float(accuracy_score(y_val, y_val_pred)),
+        "val_brier_score": float(brier_score_loss(y_val, y_val_proba)),
     }
 
     context.log.info(
-        "XGBoost validation metrics: AUC=%.3f, logloss=%.3f, acc=%.3f",
+        "XGBoost validation metrics: AUC=%.3f, logloss=%.3f, acc=%.3f, brier_score=%.3f",
         metrics["val_auc"],
         metrics["val_logloss"],
         metrics["val_accuracy"],
+        metrics["val_brier_score"],
     )
 
     context.add_output_metadata(metrics)

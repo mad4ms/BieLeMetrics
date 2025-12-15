@@ -5,6 +5,7 @@ from dagster import (
     DynamicPartitionsDefinition,
     Field,
 )
+from dagster import asset_check, AssetCheckResult
 import pandas as pd
 
 from src.fetcher_sportradar.fetch_competition_id import fetch_competition_id
@@ -148,18 +149,23 @@ def fixtures_sportradar(
     expanded_fixtures["fixture_id"] = expanded_fixtures["fixture_id"].astype(
         str
     )
-    # sort by start_time_local and round_number
+
+    s = pd.to_datetime(expanded_fixtures["start_time_utc"], errors="coerce")
+    try:
+        s = s.dt.tz_localize("Europe/Berlin")  # only works if naive
+    except TypeError:
+        pass  # already tz-aware
+    expanded_fixtures["start_time_utc"] = s.dt.tz_convert("UTC")
+
     expanded_fixtures = expanded_fixtures.sort_values(
-        by=["start_time_local", "round_number"]
+        by=["start_time_utc", "round_number"]
     ).reset_index(drop=True)
 
     # remove entries from future fixtures
-    expanded_fixtures["start_time_local"] = pd.to_datetime(
-        expanded_fixtures.get("start_time_local"), utc=True
-    )
     now_utc = pd.Timestamp.now(tz="UTC")
+
     expanded_fixtures = expanded_fixtures[
-        expanded_fixtures["start_time_local"] <= now_utc
+        expanded_fixtures["start_time_utc"] <= now_utc
     ].reset_index(drop=True)
 
     # Register dynamic partitions for fixtures
@@ -189,3 +195,33 @@ def fixtures_sportradar(
     context.add_output_metadata(metadata)
 
     return expanded_fixtures
+
+
+@asset_check(asset=fixtures_sportradar)
+def fixtures_have_unique_ids(fixtures_sportradar: pd.DataFrame):
+    ok = fixtures_sportradar["fixture_id"].is_unique
+    return AssetCheckResult(
+        passed=bool(ok),
+        metadata={
+            "n_fixtures": len(fixtures_sportradar),
+            "n_duplicates": len(fixtures_sportradar)
+            - fixtures_sportradar["fixture_id"].nunique(),
+        },
+    )
+
+
+@asset_check(asset=fixtures_sportradar)
+def fixture_session_coverage(fixtures_sportradar: pd.DataFrame):
+    ratio = float(fixtures_sportradar["session_id"].notna().mean())
+    return AssetCheckResult(
+        passed=bool(ratio > 0.9),
+        metadata={"session_id_coverage": ratio},
+    )
+
+
+@asset_check(asset=fixtures_sportradar)
+def fixtures_are_utc(fixtures_sportradar: pd.DataFrame):
+    tz = fixtures_sportradar["start_time_utc"].dt.tz
+    return AssetCheckResult(
+        passed=bool(str(tz) == "UTC"), metadata={"timezone": str(tz)}
+    )

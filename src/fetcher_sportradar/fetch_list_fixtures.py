@@ -53,12 +53,17 @@ def refine_fixtures_data(fixtures_data: list) -> pd.DataFrame:
     }
     df_fixtures = pd.DataFrame()
 
+    # Collect all refined fixture dicts/dataframes
+    refined_rows = []
+
     for fixture in fixtures_data:
         try:
+            # Flatten the fixture data
             df_fixture = pd.json_normalize(fixture)
         except NotImplementedError:
             df_fixture = pd.DataFrame([fixture])
-        # drop columns that are not in columns list and rename selected columns
+
+        # Select and rename columns
         try:
             available = [
                 col
@@ -67,11 +72,15 @@ def refine_fixtures_data(fixtures_data: list) -> pd.DataFrame:
             ]
         except Exception:
             available = []
+
         if not available:
-            # nothing to add
             continue
+
         df_fixture = df_fixture[available].rename(columns=columns_to_keep)
-        df_fixtures = pd.concat([df_fixtures, df_fixture], ignore_index=True)
+        refined_rows.append(df_fixture)
+
+    if refined_rows:
+        df_fixtures = pd.concat(refined_rows, ignore_index=True)
 
     return df_fixtures
 

@@ -31,6 +31,7 @@ class DuckDBIOManager(IOManager):
         # serialize *all* opens of this DB file across processes
         with self._lock:
             con = duckdb.connect(self._db_path)
+            con.execute("SET TimeZone='UTC'")
             try:
                 yield con
             finally:

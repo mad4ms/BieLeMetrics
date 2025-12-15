@@ -13,6 +13,13 @@ from .assets_sportradar_slow import (
     teams_sportradar,
     fixtures_sportradar,
 )
+
+from .assets_sportradar_slow import (
+    fixtures_have_unique_ids,
+    fixture_session_coverage,
+    fixtures_are_utc,
+)
+
 from .assets_sportradar import (
     fixture_events_sportradar,
     fixture_players_sportradar,
@@ -95,6 +102,11 @@ defs = Definitions(
         # backfill_player_league_ids,
         rendered_throw_videos_first5,
         xg_model_training,
+    ],
+    asset_checks=[
+        fixtures_have_unique_ids,
+        fixture_session_coverage,
+        fixtures_are_utc,
     ],
     jobs=[season_refresh_job, fixture_backfill_job],
     sensors=[fixture_sensor],
