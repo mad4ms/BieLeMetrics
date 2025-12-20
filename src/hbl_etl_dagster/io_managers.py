@@ -6,6 +6,7 @@ import duckdb
 import pandas as pd
 from pathlib import Path
 from filelock import FileLock
+import json
 
 
 class DuckDBIOManager(IOManager):
@@ -46,6 +47,26 @@ class DuckDBIOManager(IOManager):
         except duckdb.CatalogException:
             return False
 
+    def _jsonify_nested_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        for col in df.columns:
+            if df[col].dtype != "object":
+                continue
+
+            # quick sample-based detection
+            sample = df[col].dropna().head(20).tolist()
+            if not any(isinstance(v, (dict, list)) for v in sample):
+                continue
+
+            df[col] = df[col].map(
+                lambda v: (
+                    json.dumps(v, ensure_ascii=False, default=str)
+                    if isinstance(v, (dict, list))
+                    else v
+                )
+            )
+        return df
+
     # --- IOManager API -------------------------------------------------------
 
     def handle_output(self, context, obj):
@@ -60,6 +81,8 @@ class DuckDBIOManager(IOManager):
             partition_col = context.definition_metadata.get(
                 "partition_column", "fixture_id"
             )
+
+            obj = self._jsonify_nested_columns(obj)
 
             with self._conn() as con:
                 if isinstance(obj, pd.DataFrame):
@@ -134,6 +157,21 @@ class DuckDBIOManager(IOManager):
                 raise RuntimeError(
                     f"DuckDB table for asset {upstream_key} not found: {e}"
                 ) from e
+
+    # positions_kinexon_raw asset can be large, so we add a method to load only a partition
+    def load_partitioned_input(
+        self, table_name: str, partition_key: str, partition_col: str
+    ) -> pd.DataFrame:
+        with self._conn() as con:
+            try:
+                query = f"""
+                SELECT *
+                FROM {table_name}
+                WHERE {partition_col} = ?
+                """
+                return con.execute(query, [partition_key]).fetch_df()
+            except duckdb.CatalogException as e:
+                raise RuntimeError(f"DuckDB error: {e}") from e
 
 
 @io_manager

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 import pandas as pd
+from scipy.__config__ import show
 
 
 FIELD_IMAGE: Path = Path("assets/handballfeld.png")
@@ -22,6 +23,7 @@ def render_goal_with_multifreeze(
     field_image_path: Optional[Path] = None,
     out_dir: Optional[Path] = None,
     fps: Optional[int] = None,
+    show: bool = False,
 ) -> Optional[Path]:
     """
     Render a goal clip and freeze at multiple marker times.
@@ -74,8 +76,8 @@ def render_goal_with_multifreeze(
     df_scene = df_scene.sort_values("ts").copy()
 
     df_scene["frame_idx"] = df_scene.groupby("ts").ngroup()
-    df_scene["prev_x"] = df_scene.groupby(["mapped id"])["x in m"].shift(1)
-    df_scene["prev_y"] = df_scene.groupby(["mapped id"])["y in m"].shift(1)
+    df_scene["prev_x"] = df_scene.groupby(["mapped_id"])["x_m"].shift(1)
+    df_scene["prev_y"] = df_scene.groupby(["mapped_id"])["y_m"].shift(1)
 
     event_id_for_name = (
         event_id_for_print if event_id_for_print is not None else "unknown"
@@ -99,8 +101,6 @@ def render_goal_with_multifreeze(
         m["done"] = False
 
     shooter_league_id = row_goal.get("person_league_id", None)
-    if shooter_league_id is None:
-        shooter_league_id = row_goal.get("kin_league_id", None)
     goalkeeper_league_id = row_goal.get("goalkeeper_league_id", None)
 
     def color_for_group(group_id: float):
@@ -141,17 +141,17 @@ def render_goal_with_multifreeze(
         img_draw = img.copy()
 
         for _, r in group.iterrows():
-            gid = r.get("group id", None)
+            gid = r.get("group_id", None)
             color, radius = color_for_group(gid)
-            if pd.isna(r["x in m"]) or pd.isna(r["y in m"]):
+            if pd.isna(r["x_m"]) or pd.isna(r["y_m"]):
                 continue
-            x = int(float(r["x in m"]) * scale)
-            y = int(float(r["y in m"]) * scale)
+            x = int(float(r["x_m"]) * scale)
+            y = int(float(r["y_m"]) * scale)
             cv2.circle(
                 img_draw, (x, y), radius, color, -1, lineType=cv2.LINE_AA
             )
 
-            name = r.get("full name", "N/A")
+            name = r.get("full_name", "N/A")
             cv2.putText(
                 img_draw,
                 f"{name}",
@@ -165,7 +165,7 @@ def render_goal_with_multifreeze(
 
             try:
                 if shooter_league_id is not None and int(
-                    r.get("league id", -1)
+                    r.get("league_id", -1)
                 ) == int(shooter_league_id):
                     cv2.circle(
                         img_draw,
@@ -176,7 +176,7 @@ def render_goal_with_multifreeze(
                         cv2.LINE_AA,
                     )
                 if goalkeeper_league_id is not None and int(
-                    r.get("league id", -1)
+                    r.get("league_id", -1)
                 ) == int(goalkeeper_league_id):
                     cv2.circle(
                         img_draw,
@@ -196,25 +196,25 @@ def render_goal_with_multifreeze(
                 & (df_scene["frame_idx"] > current_idx - TRAIL_FRAMES)
             ]
             for _, r in trail_slice.iterrows():
-                if pd.isna(r["x in m"]) or pd.isna(r["y in m"]):
+                if pd.isna(r["x_m"]) or pd.isna(r["y_m"]):
                     continue
-                x_t = int(float(r["x in m"]) * scale)
-                y_t = int(float(r["y in m"]) * scale)
-                gid_t = r.get("group id", None)
+                x_t = int(float(r["x_m"]) * scale)
+                y_t = int(float(r["y_m"]) * scale)
+                gid_t = r.get("group_id", None)
                 c_t, _ = color_for_group(gid_t)
                 cv2.circle(img_draw, (x_t, y_t), 3, c_t, -1, cv2.LINE_AA)
 
-        for _, br in group[group["group id"] == 3].iterrows():
+        for _, br in group[group["group_id"] == 3].iterrows():
             if not (
                 pd.isna(br["prev_x"])
                 or pd.isna(br["prev_y"])
-                or pd.isna(br["x in m"])
-                or pd.isna(br["y in m"])
+                or pd.isna(br["x_m"])
+                or pd.isna(br["y_m"])
             ):  # ball
                 x0 = int(br["prev_x"] * scale)
                 y0 = int(br["prev_y"] * scale)
-                x1 = int(br["x in m"] * scale)
-                y1 = int(br["y in m"] * scale)
+                x1 = int(br["x_m"] * scale)
+                y1 = int(br["y_m"] * scale)
                 cv2.arrowedLine(
                     img_draw,
                     (x0, y0),
@@ -256,8 +256,9 @@ def render_goal_with_multifreeze(
                     first_png_saved = True
 
                 for _ in range(m["frames"]):
-                    # cv2.imshow("Render", img_draw)
-                    # cv2.waitKey(2)
+                    if show:
+                        cv2.imshow("Render", img_draw)
+                        cv2.waitKey(2)
                     writer.write(cv2.resize(img_draw, (width, height)))
                 m["done"] = True
                 any_frozen = True
@@ -267,12 +268,12 @@ def render_goal_with_multifreeze(
         if not first_png_saved:
             cv2.imwrite(str(out_path_img), img_draw)
             first_png_saved = True
-
-        # cv2.imshow("Render", img_draw)
-        # key = cv2.waitKey(1)
-        # if key == 27:  # ESC
-        #     print("⏹️ Rendering aborted by user.")
-        #     break
+        if show:
+            cv2.imshow("Render", img_draw)
+            key = cv2.waitKey(1)
+            if key == 27:  # ESC
+                print("⏹️ Rendering aborted by user.")
+                break
         writer.write(cv2.resize(img_draw, (width, height)))
 
     writer.release()

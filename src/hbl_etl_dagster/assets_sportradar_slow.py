@@ -9,7 +9,7 @@ from dagster import asset_check, AssetCheckResult
 import pandas as pd
 
 from src.fetcher_sportradar.fetch_competition_id import fetch_competition_id
-from src.fetcher_sportradar.fetch_saison_id import fetch_season_id
+from fetcher_sportradar.fetch_season_id import fetch_season_id
 from src.fetcher_sportradar.fetch_teams import fetch_teams_by_season_id
 from src.fetcher_sportradar.fetch_list_fixtures import (
     fetch_list_fixtures,

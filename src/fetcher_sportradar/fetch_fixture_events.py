@@ -5,7 +5,7 @@ from typing import List, Tuple
 import pandas as pd
 from tqdm import tqdm
 
-from src.fetcher_sportradar.fetch_players_from_fixture_events import (
+from fetcher_sportradar.fetch_players import (
     get_players_for_fixture,
 )
 
