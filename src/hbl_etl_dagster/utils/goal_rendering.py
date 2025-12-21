@@ -55,7 +55,7 @@ def render_goal_with_multifreeze(
     if "ts" not in df_positions.columns:
         df_positions = df_positions.copy()
         df_positions["ts"] = pd.to_datetime(
-            df_positions["ts in ms"], unit="ms", utc=True
+            df_positions["timestamp_ms"], unit="ms", utc=True
         )
 
     t_min = min(pd.to_datetime(m["ts"]) for m in valid_markers)
@@ -101,6 +101,7 @@ def render_goal_with_multifreeze(
         m["done"] = False
 
     shooter_league_id = row_goal.get("person_league_id", None)
+    assisting_league_id = row_goal.get("assisting_league_id", None)
     goalkeeper_league_id = row_goal.get("goalkeeper_league_id", None)
 
     def color_for_group(group_id: float):
@@ -113,14 +114,50 @@ def render_goal_with_multifreeze(
         return (200, 200, 200), 8
 
     def draw_overlay(img_draw, ts_val: pd.Timestamp):
+        def ms_delta(now: pd.Timestamp, then: str) -> int:
+            """Return non-negative delta in milliseconds."""
+            delta_ms = (
+                now - pd.to_datetime(then, utc=True)
+            ).total_seconds() * 1000
+            return int(delta_ms)
+
+        is_home = row_goal.get("entity_id_home", None) == row_goal.get(
+            "entity_id", None
+        )
+        team_side = "Home" if is_home else "Away"
+
+        team_name = row_goal.get(f"team_name_offense", "N/A")
+
+        # scores look like '{"fe7bdd16-3952-11ef-b585-af5c55c3771d": 1, "fe9e91c7-3952-11ef-bd62-af5c55c3771d": 0}'
+
         hud_lines = [
-            f"Clock: {row_goal.get('kin_game_clock', '')} Team: {row_goal.get('team_name', '')} (is_home: {row_goal.get('is_team_home', '')})",
-            f"EventType: {row_goal.get('sub_type', '')} AttackType: {row_goal.get('attack_type', '')}, failureReason: {row_goal.get('failure_reason', '')}, sucess: {row_goal.get('kin_success', '')}",
-            f"Shooter Name: {row_goal.get('person_name', 'N/A')}  |  "
-            f"GK Name: {row_goal.get('goalkeeper_name', 'N/A')}",
+            (
+                f"Clock: {row_goal.get('clock', '')} | {score_str} | "
+                f"Team: {team_name} (Side: {team_side})"
+            ),
+            (
+                f"EventType: {row_goal.get('sub_type', '')} | "
+                f"AttackType: {row_goal.get('attack_type', '')} | "
+                f"FailureReason: {row_goal.get('failure_reason', '')} | "
+                f"Success: {row_goal.get('success', '')}"
+            ),
+            (
+                f"Shooter: {row_goal.get('person_name', 'N/A')} | "
+                f"GK: {row_goal.get('goalkeeper_name', 'N/A')}"
+            ),
             f"Frame time (UTC): {ts_val.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}",
-            "Markers: " + ", ".join([m["name"] for m in valid_markers]),
+            "Markers: " + ", ".join(m["name"] for m in valid_markers),
+            "Freeze in: "
+            + ", ".join(
+                f"{m['name']} ({ms_delta(ts_val, m['ts'])} ms)"
+                for m in valid_markers
+            ),
+            (
+                f"Event end: {row_goal.get('event_time_ms', '')} ms | "
+                f"{pd.to_datetime(row_goal.get('event_time_ms', 0), unit='ms', utc=True)}"
+            ),
         ]
+
         y0 = 28
         for line in hud_lines:
             cv2.putText(
@@ -136,6 +173,15 @@ def render_goal_with_multifreeze(
             y0 += 20
 
     first_png_saved = False
+
+    scores_dict = {}
+    try:
+        scores_dict = eval(row_goal.get("scores", "{}"))
+    except Exception:
+        pass
+    score_home = scores_dict.get(row_goal["entity_id_home"], 0)
+    score_away = scores_dict.get(row_goal["entity_id_away"], 0)
+    score_str = f"Score: {score_home} - {score_away}"
 
     for ts, group in df_scene.groupby("ts"):
         img_draw = img.copy()
@@ -183,6 +229,17 @@ def render_goal_with_multifreeze(
                         (x, y),
                         radius + 6,
                         (0, 255, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
+                if assisting_league_id is not None and int(
+                    r.get("league_id", -1)
+                ) == int(assisting_league_id):
+                    cv2.circle(
+                        img_draw,
+                        (x, y),
+                        radius + 6,
+                        (0, 255, 0),
                         2,
                         cv2.LINE_AA,
                     )
@@ -258,7 +315,7 @@ def render_goal_with_multifreeze(
                 for _ in range(m["frames"]):
                     if show:
                         cv2.imshow("Render", img_draw)
-                        cv2.waitKey(2)
+                        cv2.waitKey(10)
                     writer.write(cv2.resize(img_draw, (width, height)))
                 m["done"] = True
                 any_frozen = True
