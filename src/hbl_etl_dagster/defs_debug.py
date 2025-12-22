@@ -36,6 +36,9 @@ from .assets_raw.assets_sportradar_raw_fixture import (
 from .assets_raw.assets_kinexon_raw_fixture import (
     positions_kinexon_raw,
     detected_events_kinexon_raw,
+    check_positions_kinexon_raw_notna,
+    check_detected_events_have_unique_event_ids_when_present
+
 )
 from .assets_raw.assets_kinexon_raw_season import (
     teams_kinexon_raw,
@@ -144,6 +147,8 @@ defs = Definitions(
         check_players_have_unique_person_ids_when_present,
         players_fixture_id_matches_events_when_present,
         check_match_detected_shots_normalized,
+        check_positions_kinexon_raw_notna,
+        check_detected_events_have_unique_event_ids_when_present,
     ],
     jobs=[
         season_raw_refresh_job,

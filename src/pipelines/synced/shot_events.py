@@ -166,8 +166,11 @@ def _sync_goals_to_detected_shots(
     tol_after_ms: int,
 ) -> pd.DataFrame:
     """
-    For each goal, select the closest detected shot within [goal_ms - tol_before, goal_ms + tol_after]
-    restricted by shooter league_id.
+    For each goal, select the closest detected shot within [goal_ms - tol_before, goal_ms + tol_after].
+
+    Strategy:
+      1. Try to match by shooter league_id within tolerance.
+      2. If no match, fall back to closest shot by time within tolerance (ignoring player).
 
     Output is row-preserving for df_goals (left join semantics).
     """
@@ -176,6 +179,7 @@ def _sync_goals_to_detected_shots(
         out["detected_shot_id"] = pd.NA
         out["detected_events_shot_time"] = pd.NaT
         out["time_difference_ms"] = pd.NA
+        out["match_method"] = pd.NA
         return out
 
     kx = df_match_detected_shots_normalized.copy()
@@ -194,43 +198,61 @@ def _sync_goals_to_detected_shots(
     for _, g in goals.iterrows():
         g_ms = g.get("event_time_ms")
         lid = g.get("person_league_id")
-        if pd.isna(g_ms) or pd.isna(lid):
+        if pd.isna(g_ms):
             continue
 
         lo = int(g_ms) - int(tol_before_ms)
         hi = int(g_ms) + int(tol_after_ms)
 
-        cand = kx[
-            (kx["league_id"] == lid) & (kx["timestamp_ms"].between(lo, hi))
-        ].copy()
-        if cand.empty:
-            continue
+        # Filter candidates by time window first
+        cand_time = kx[kx["timestamp_ms"].between(lo, hi)].copy()
 
-        cand["time_diff"] = (cand["timestamp_ms"] - int(g_ms)).abs()
-        best = cand.loc[cand["time_diff"].idxmin()]
+        best = None
+        method = None
 
-        rows.append(
-            {
-                "goal_event_id": g["event_id"],
-                "detected_shot_id": best.get("id"),
-                "detected_events_shot_time": pd.to_datetime(
-                    int(best["timestamp_ms"]), unit="ms", utc=True
-                ),
-                "time_difference_ms": int(best["time_diff"]),
-                "distance": best.get("distance"),
-                "speed_ball": best.get("speed_ball"),
-                "trajectory": best.get("trajectory"),
-                "shot_position_x": best.get("shot_position_x"),
-                "shot_position_y": best.get("shot_position_y"),
-                "hit_position_y": best.get("hit_position_y"),
-                "hit_position_z": best.get("hit_position_z"),
-                "sucess_kinexon": best.get("success"),
-                "shot_category": best.get("shot_category"),
-                "shot_type": best.get("shot_type"),
-                "validated": best.get("validated"),
-                "assisting_mapped_id": best.get("assisting_player_id"),
-            }
-        )
+        if not cand_time.empty:
+            # 1. Try strict player match
+            if pd.notna(lid):
+                cand_player = cand_time[cand_time["league_id"] == lid].copy()
+                if not cand_player.empty:
+                    cand_player["time_diff"] = (
+                        cand_player["timestamp_ms"] - int(g_ms)
+                    ).abs()
+                    best = cand_player.loc[cand_player["time_diff"].idxmin()]
+                    method = "player_time"
+
+            # 2. Fallback to time-only match
+            if best is None:
+                cand_time["time_diff"] = (
+                    cand_time["timestamp_ms"] - int(g_ms)
+                ).abs()
+                best = cand_time.loc[cand_time["time_diff"].idxmin()]
+                method = "time_only_fallback"
+
+        if best is not None:
+            rows.append(
+                {
+                    "goal_event_id": g["event_id"],
+                    "detected_shot_id": best.get("id"),
+                    "detected_events_shot_time": pd.to_datetime(
+                        int(best["timestamp_ms"]), unit="ms", utc=True
+                    ),
+                    "time_difference_ms": int(best["time_diff"]),
+                    "distance": best.get("distance"),
+                    "speed_ball": best.get("speed_ball"),
+                    "trajectory": best.get("trajectory"),
+                    "shot_position_x": best.get("shot_position_x"),
+                    "shot_position_y": best.get("shot_position_y"),
+                    "hit_position_y": best.get("hit_position_y"),
+                    "hit_position_z": best.get("hit_position_z"),
+                    "sucess_kinexon": best.get("success"),
+                    "shot_category": best.get("shot_category"),
+                    "shot_type": best.get("shot_type"),
+                    "validated": best.get("validated"),
+                    "assisting_mapped_id": best.get("assisting_player_id"),
+                    "match_method": method,
+                }
+            )
     if rows == []:
         df_synced = pd.DataFrame(
             columns=[
@@ -238,6 +260,7 @@ def _sync_goals_to_detected_shots(
                 "detected_shot_id",
                 "detected_events_shot_time",
                 "time_difference_ms",
+                "match_method",
             ]
         )
     else:
@@ -406,11 +429,11 @@ def detect_throw_point(
     if not poss.any():
         return out
 
-    dx = df_pb["ball_x"] - x_pos_goal
-    vx = df_pb["ball_x"].diff() / df_pb["timestamp_ms"].diff()
-
-    towards_goal = (dx * vx) < 0
-    df_pb = df_pb[towards_goal]
+    # Removed strict towards_goal filter as it can be noisy
+    # dx = df_pb["ball_x"] - x_pos_goal
+    # vx = df_pb["ball_x"].diff() / df_pb["timestamp_ms"].diff()
+    # towards_goal = (dx * vx) < 0
+    # df_pb = df_pb[towards_goal]
 
     # End of possession: True followed by False (or end of series)
     is_end = poss & (~poss.shift(-1, fill_value=False))
@@ -874,13 +897,27 @@ def sync_shot_events(
         debug_plot=False,
         debug_plot_max=15,
     )
-
-    df_goals = df_goals.merge(df_throw_events, on="event_id", how="left")
+    if "event_id" not in df_throw_events.columns:
+        logging.warning("No throw timestamps detected.")
+        df_goals["throw_timestamp_ms"] = pd.NA
+        df_goals["throw_ts"] = pd.NaT
+        df_goals["throw_acceleration"] = pd.NA
+        df_goals["method"] = pd.NA
+        df_goals["detected_events_shot_time"] = pd.NA
+        df_goals["time_difference_ms"] = pd.NA
+        df_goals["match_method"] = pd.NA
+    else:
+        logging.info(
+            "Refined throw timestamps for %d goal rows.",
+            len(df_throw_events),
+        )
+        df_goals = df_goals.merge(df_throw_events, on="event_id", how="left")
 
     # Deltas
     if (
         "detected_events_shot_time" in df_goals.columns
         and "throw_timestamp_ms" in df_goals.columns
+        and not df_goals["detected_events_shot_time"].isna().all()
     ):
         df_goals["time_diff_detected_shot_throw_ms"] = (
             df_goals["detected_events_shot_time"].astype("int64") // 1_000_000
@@ -1017,67 +1054,120 @@ if __name__ == "__main__":
     # positions_normalized
     # players
     db = duckdb.connect(con_duckdb)
-    df_match = db.execute(
+    df_matches = db.execute(
         f"""
         SELECT *
         FROM matches_normalized
-        WHERE fixture_id = '{fixture_id}'
         """
     ).df()
 
-    df_goals = db.execute(
-        f"""
-        SELECT *
-        FROM match_events_normalized_goals
-        WHERE fixture_id = '{fixture_id}'
-        AND event_type = 'goal'
-        """
-    ).df()
-    df_detected_shots = db.execute(
-        f"""
-        SELECT *
-        FROM match_detected_shots_normalized
-        WHERE fixture_id = '{fixture_id}'
-        """
-    ).df()
-    df_positions = db.execute(
-        f"""
-        SELECT *
-        FROM match_positions_normalized
-        WHERE fixture_id = '{fixture_id}'
-        """
-    ).df()
-    df_players = db.execute(
-        f"""
-        SELECT *
-        FROM players
-        WHERE fixture_id = '{fixture_id}'
-        """
-    ).df()
-    df_synced = sync_shot_events(
-        df_match_normalized=df_match,
-        df_match_events_normalized_goals=df_goals,
-        df_match_detected_shots_normalized=df_detected_shots,
-        df_positions_normalized=df_positions,
-        df_players=df_players,
+    list_fixture_ids = (
+        df_matches.sort_values(by="start_time_local", ascending=True)
+        .loc[:, "fixture_id"]
+        .unique()
+        .tolist()
     )
 
-    df_renders = render_shot_event(
-        df_goals=df_synced,
-        df_positions=df_positions,
-        max_events=5,
-        require_throw_ts=False,
-        output_dir=OUT_DIR,
-    )
+    for fixture_id in list_fixture_ids:
+        logging.info("Processing fixture_id=%s", fixture_id)
 
-    # log coverage of synced events
-    n_synced = df_synced["throw_timestamp_ms"].notna().sum()
-    logging.info(
-        "Number of synced events with throw timestamp: %d of total %d",
-        n_synced,
-        len(df_synced),
-    )
-    logging.info(
-        "Coverage: %.2f%%",
-        (n_synced / len(df_synced)) * 100.0 if len(df_synced) > 0 else 0.0,
-    )
+        df_match = df_matches[df_matches["fixture_id"] == fixture_id].copy()
+
+        # log info about the match
+        if df_match.empty:
+            logging.warning(
+                "No match data for fixture_id=%s, skipping.", fixture_id
+            )
+            continue
+        else:
+            logging.info(
+                "\n\n\nMatch info: %s vs %s on %s",
+                df_match.iloc[0]["team_name_home"],
+                df_match.iloc[0]["team_name_away"],
+                df_match.iloc[0]["start_time_local"],
+            )
+
+        df_goals = db.execute(
+            f"""
+            SELECT *
+            FROM match_events_normalized_goals
+            WHERE fixture_id = '{fixture_id}'
+            AND event_type = 'goal'
+            """
+        ).df()
+
+        df_detected_shots = db.execute(
+            f"""
+            SELECT *
+            FROM match_detected_shots_normalized
+            WHERE fixture_id = '{fixture_id}'
+            """
+        ).df()
+        df_positions = db.execute(
+            f"""
+            SELECT *
+            FROM match_positions_normalized
+            WHERE fixture_id = '{fixture_id}'
+            """
+        ).df()
+        df_players = db.execute(
+            f"""
+            SELECT *
+            FROM players
+            WHERE fixture_id = '{fixture_id}'
+            """
+        ).df()
+
+        # check if positions data is available
+        if df_positions.empty:
+            logging.warning(
+                "No positions data for fixture_id=%s, skipping.", fixture_id
+            )
+            continue
+
+        df_synced = sync_shot_events(
+            df_match_normalized=df_matches,
+            df_match_events_normalized_goals=df_goals,
+            df_match_detected_shots_normalized=df_detected_shots,
+            df_positions_normalized=df_positions,
+            df_players=df_players,
+        )
+
+        # df_renders = render_shot_event(
+        #     df_goals=df_synced,
+        #     df_positions=df_positions,
+        #     max_events=5,
+        #     require_throw_ts=False,
+        #     output_dir=OUT_DIR,
+        # )
+
+        # log coverage of synced events
+        n_synced = df_synced["throw_timestamp_ms"].notna().sum()
+        logging.info(
+            "Number of synced events with throw timestamp: %d of total %d",
+            n_synced,
+            len(df_synced),
+        )
+        logging.info(
+            "Coverage: %.2f%%",
+            (n_synced / len(df_synced)) * 100.0 if len(df_synced) > 0 else 0.0,
+        )
+        # coverage of goalkeeper_league_id
+        n_gk_league_id = df_synced["goalkeeper_league_id"].notna().sum()
+        logging.info(
+            "Number of events with goalkeeper_league_id: %d of total %d",
+            n_gk_league_id,
+            len(df_synced),
+        )
+        # time difference of event_time_ms - throw_timestamp_ms
+        if "time_diff_event_throw_ms" in df_synced.columns:
+            diffs = (
+                df_synced["time_diff_event_throw_ms"].dropna().astype(float)
+            )
+            if not diffs.empty:
+                logging.info(
+                    "Time difference event_time_ms - throw_timestamp_ms: mean=%.2f ms, median=%.2f ms, std=%.2f ms",
+                    diffs.mean(),
+                    diffs.median(),
+                    diffs.std(),
+                )

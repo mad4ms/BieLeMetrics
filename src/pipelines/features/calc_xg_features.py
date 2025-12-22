@@ -163,11 +163,11 @@ def calculate_xg_features(
             shooter_lateral_offset = abs(shooter_y - goal_y)
 
         else:
-            shooter_distance_to_goalkeeper = None
-            goalkeeper_distance_to_goal = None
-            goalkeeper_x = None
-            goalkeeper_y = None
-            shooter_lateral_offset = None
+            shooter_distance_to_goalkeeper = np.nan
+            goalkeeper_distance_to_goal = np.nan
+            goalkeeper_x = np.nan
+            goalkeeper_y = np.nan
+            shooter_lateral_offset = np.nan
 
         # league_id_ball is where league_id contains ball or Ball
         df_ball = df_positions_shot[
@@ -181,8 +181,8 @@ def calculate_xg_features(
             ball_x = df_ball["x_m"].iloc[0]
             ball_y = df_ball["y_m"].iloc[0]
         else:
-            ball_x = None
-            ball_y = None
+            ball_x = np.nan
+            ball_y = np.nan
 
         # ball
         if not df_ball.empty:
@@ -288,6 +288,23 @@ def calculate_xg_features(
             }
         )
     df_features = pd.DataFrame(features_list)
+    # convert numeric columns to float64
+    numeric_cols = [
+        "avg_offense_distance_to_goal",
+        "avg_defense_distance_to_goal",
+        "shooter_distance_to_goal",
+        "shooter_distance_to_goalkeeper",
+        "goalkeeper_distance_to_goal",
+        "ball_distance_to_goal",
+        "ball_distance_to_goalkeeper",
+        "shot_angle_to_goal",
+        "ball_angle_to_goal",
+        "angle_ball_to_goalkeeper",
+        "num_defenders_close",
+        "closest_defender_distance",
+        "shooter_lateral_offset",
+    ]
+    df_features[numeric_cols] = df_features[numeric_cols].astype("float64")
     return df_features
 
 

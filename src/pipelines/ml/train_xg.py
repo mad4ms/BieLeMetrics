@@ -138,7 +138,7 @@ def train_xg_model(
     # --- validation ---
     y_val_proba = model.predict_proba(X_val)[:, 1]
 
-    metrics: Dict[str, Any] = {
+    metrics_raw: Dict[str, Any] = {
         "n_fixtures": df["fixture_id"].nunique(),
         "n_samples_total": len(df),
         "n_samples_train": len(X_train),
@@ -154,9 +154,26 @@ def train_xg_model(
             "val_brier": float(brier_score_loss(y_val, y_val_proba)),
         },
     }
+    metrics_flat: Dict[str, float | int] = {
+        # model performance
+        "val_auc": metrics_raw["model"]["val_auc"],
+        "val_logloss": metrics_raw["model"]["val_logloss"],
+        "val_brier": metrics_raw["model"]["val_brier"],
+        # baseline
+        "baseline_auc": metrics_raw["baseline"]["baseline_auc"],
+        "baseline_logloss": metrics_raw["baseline"]["baseline_logloss"],
+        "baseline_brier": metrics_raw["baseline"]["baseline_brier"],
+        # dataset stats
+        "n_fixtures": metrics_raw["n_fixtures"],
+        "n_samples_total": metrics_raw["n_samples_total"],
+        "n_samples_train": metrics_raw["n_samples_train"],
+        "n_samples_val": metrics_raw["n_samples_val"],
+        "class_balance_pos": metrics_raw["class_balance"]["pos"],
+        "class_balance_neg": metrics_raw["class_balance"]["neg"],
+    }
 
-    logging.info("xG Model metrics:\n%s", json.dumps(metrics, indent=2))
-    return model, metrics
+    logging.info("xG Model metrics:\n%s", json.dumps(metrics_flat, indent=2))
+    return model, metrics_flat
 
 
 if __name__ == "__main__":

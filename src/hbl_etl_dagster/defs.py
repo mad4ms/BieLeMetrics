@@ -33,7 +33,7 @@ from .assets_sync import (
     rendered_throw_videos_first5,
 )
 from .assets_feature import features_at_throw_time
-from .assets_ml import xg_model_training
+from .assets_machlearn import xg_model_training
 
 # from .assets_maintenance import backfill_player_league_ids
 

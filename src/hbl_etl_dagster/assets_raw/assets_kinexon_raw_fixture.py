@@ -1,14 +1,18 @@
 # assets_sportradar_raw.py
+from multiprocessing import context
 import os
 from dagster import (
     AssetExecutionContext,
     AssetCheckResult,
+    AssetCheckExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
     MetadataValue,
     asset,
     asset_check,
+    TableColumn,
+    TableSchema,
 )
 import pandas as pd
 
@@ -112,14 +116,21 @@ def positions_kinexon_raw(
     )
     context.add_output_metadata(
         {
+            "dagster/column_schema": TableSchema(
+                columns=[
+                    TableColumn(name=col, type=str(dtype))
+                    for col, dtype in df_positions.dtypes.items()
+                ]
+            ),
+            "dagster/row_count": len(df_positions),
             "fixture_id": str(fixture_id),
-            "n_rows": len(df_positions),
             "n_columns": df_positions.shape[1],
             "preview": MetadataValue.md(
                 df_positions.head().to_markdown(index=False)
             ),
         }
     )
+
     return df_positions
 
 
@@ -169,21 +180,62 @@ def detected_events_kinexon_raw(
         fixture_id,
     )
     context.add_output_metadata(
-        {
-            "fixture_id": str(fixture_id),
-            "n_rows": len(df_events),
-            "n_columns": df_events.shape[1],
-            "preview": MetadataValue.md(
-                df_events.head().to_markdown(index=False)
-            ),
-        }
-    )
-
+    {
+        "dagster/column_schema": TableSchema(
+            columns=[
+                TableColumn(name=col, type=str(dtype))
+                for col, dtype in df_events.dtypes.items()
+            ]
+        ),
+        "dagster/row_count": len(df_events),
+        "fixture_id": str(fixture_id),
+        "n_columns": df_events.shape[1],
+        "preview": MetadataValue.md(
+            df_events.head().to_markdown(index=False)
+        ),
+    }
+)
     return df_events
 
 
+@asset_check(asset=positions_kinexon_raw)
+def check_positions_kinexon_raw_notna(context: AssetCheckExecutionContext) -> AssetCheckResult:
+    partition_key = context.run.tags["dagster/partition"]
+    df_match_position = context.resources.io_manager.load_partitioned_input(
+        table_name="positions_kinexon_raw",
+        partition_col="fixture_id",
+        partition_key=partition_key,
+    )
+
+
+    # check if length is not zero, fail check if zero
+    if df_match_position.empty:
+        return AssetCheckResult(passed=False, metadata={"failed": "no rows"})
+
+    # check if > 90% of x in m and y in m columns are not null
+    required_columns = ["x in m", "y in m"]
+    for col in required_columns:
+        if col not in df_match_position.columns:
+            return AssetCheckResult(
+                passed=False, metadata={"failed": f"{col} column missing"}
+            )
+        n_notna = df_match_position[col].notna().sum()
+        n_total = len(df_match_position)
+        if n_total == 0 or (n_notna / n_total) < 0.9:
+            return AssetCheckResult(
+                passed=False,
+                metadata={
+                    "failed": f"{col} has less than 90% non-null values ({n_notna}/{n_total})"
+                },
+            )
+
+    return AssetCheckResult(
+        passed=True,
+        metadata={"checked_columns": ["x in m", "y in m"], "n_rows": len(df_match_position)},
+    )
+
 @asset_check(asset=detected_events_kinexon_raw)
-def check_events_have_unique_event_ids_when_present(
+def check_detected_events_have_unique_event_ids_when_present(
     detected_events_kinexon_raw: pd.DataFrame,
 ) -> AssetCheckResult:
     if detected_events_kinexon_raw.empty:

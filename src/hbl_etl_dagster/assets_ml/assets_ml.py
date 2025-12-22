@@ -11,20 +11,24 @@ from dagster import (
 )
 import pandas as pd
 
+from sklearn.pipeline import Pipeline
+
+
 from src.pipelines.ml.train_xg import (
     train_xg_model as train_xg_model_fn,
 )
 
 
 @asset(
+    required_resource_keys=set(),  # no DuckDB needed here unless you want to persist
     group_name="ml",
-    compute_kind="duckdb",
+    compute_kind="xgboost",
     description="Trained xG model for a single fixture (partitioned by fixture_id).",
 )
 def ml_xg_model(
     context: AssetExecutionContext,
     features_xg: pd.DataFrame,
-) -> object:
+) -> Pipeline:
     """
     Train xG model for feature table.
 
@@ -43,9 +47,9 @@ def ml_xg_model(
     context.log.info("Trained xG model.")
     context.add_output_metadata(
         {
-            "n_samples": len(df_features_xg),
+            "dagster/row_count": len(df_features_xg),
             "n_unique_fixtures": df_features_xg["fixture_id"].nunique(),
-            "metrics": MetadataValue.json(metrics),
+            **metrics,
         }
     )
 
