@@ -1,7 +1,9 @@
 # assets_sportradar_raw.py
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
+    AssetCheckExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -9,7 +11,6 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.pipelines.synced.players import (
     extract_players_for_match as extract_players_for_match_fn,
@@ -101,3 +102,154 @@ def players(
     )
 
     return df_players_in_events
+
+
+@asset_check(
+    asset="players",
+    name="check_players_integrity",
+)
+def check_players_integrity(
+    context: AssetCheckExecutionContext,
+    players: pd.DataFrame,
+) -> AssetCheckResult:
+    # ------------------------------------------------------------------
+    # 1. Column contract
+    # ------------------------------------------------------------------
+    required_columns = {
+        "fixture_id",
+        "entity_id",
+        "person_id",
+        "name",
+        "bib",
+        "position",
+        "team_name",
+        "team_side",
+        "date_of_birth",
+        "name_family_latin",
+        "name_family_local",
+        "name_full_latin",
+        "name_full_local",
+        "name_given_latin",
+        "name_given_local",
+        "nationality",
+        "height",
+        "weight",
+        "mapped_id",
+        "league_id",
+        "session_id",
+    }
+
+    missing_columns = required_columns - set(players.columns)
+    if missing_columns:
+        return AssetCheckResult(
+            passed=False,
+            description=f"Missing required columns: {sorted(missing_columns)}",
+        )
+
+    # First execution / nothing materialized yet
+    if players.empty:
+        return AssetCheckResult(passed=True)
+
+    # ------------------------------------------------------------------
+    # 2. Global identity integrity
+    #    (same identity must not drift across fixtures)
+    # ------------------------------------------------------------------
+    identity_key = ["person_id", "entity_id", "league_id"]
+
+    identity_payload = [
+        "name",
+        "date_of_birth",
+        "nationality",
+        "height",
+        "weight",
+        "mapped_id",
+        "name_family_latin",
+        "name_family_local",
+        "name_full_latin",
+        "name_full_local",
+        "name_given_latin",
+        "name_given_local",
+    ]
+
+    inconsistencies = (
+        players.drop(columns=["fixture_id", "session_id"])
+        .groupby(identity_key, dropna=False)[identity_payload]
+        .nunique()
+        .max(axis=1)
+        .loc[lambda s: s > 1]
+    )
+
+    if not inconsistencies.empty:
+        return AssetCheckResult(
+            passed=False,
+            description=(
+                "Conflicting player identity records detected for the same "
+                "(person_id, entity_id, league_id)"
+            ),
+            metadata={
+                "n_conflicting_identity_keys": int(len(inconsistencies)),
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # 3. Partition-wise checks (current fixture only)
+    # ------------------------------------------------------------------
+    partition_key = context.run.tags.get("dagster/partition")
+
+    if partition_key is None:
+        return AssetCheckResult(
+            passed=True,
+            metadata={"skipped": "no partition context"},
+        )
+
+    players_part = players[players["fixture_id"] == str(partition_key)]
+
+    if players_part.empty:
+        return AssetCheckResult(
+            passed=False,
+            metadata={
+                "failed": "no rows for partition",
+                "fixture_id": partition_key,
+            },
+        )
+
+    # Uniqueness within fixture
+    dup_mask = players_part.duplicated(subset=identity_key)
+    if dup_mask.any():
+        return AssetCheckResult(
+            passed=False,
+            metadata={
+                "failed": "duplicate (person_id, entity_id, league_id) within fixture",
+                "n_duplicates": int(dup_mask.sum()),
+                "fixture_id": partition_key,
+            },
+        )
+
+    # Minimum player sanity check
+    THRESHOLD_MIN_PLAYERS = 14
+    if len(players_part) < THRESHOLD_MIN_PLAYERS:
+        return AssetCheckResult(
+            passed=False,
+            metadata={
+                "failed": (
+                    f"too few players: {len(players_part)} "
+                    f"(expected ≥ {THRESHOLD_MIN_PLAYERS})"
+                ),
+                "fixture_id": partition_key,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # 4. Success
+    # ------------------------------------------------------------------
+    return AssetCheckResult(
+        passed=True,
+        metadata={
+            "fixture_id": partition_key,
+            "n_rows_fixture": len(players_part),
+            "n_unique_players_fixture": players_part["person_id"].nunique(),
+            "n_unique_identity_keys_global": players[identity_key]
+            .drop_duplicates()
+            .shape[0],
+        },
+    )

@@ -1,6 +1,7 @@
+from typing import Any, Dict
+
 import pandas as pd
 from dagster import MetadataValue
-from typing import Dict, Any
 
 
 def preview_metadata(df: pd.DataFrame, n: int = 10) -> Dict[str, Any]:

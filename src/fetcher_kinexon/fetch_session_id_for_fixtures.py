@@ -1,12 +1,12 @@
 """fetch_session_id_for_fixtures.py: Module to fetch session IDs for fixtures from Kinexon API."""
 
+import datetime
+import difflib
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional, Tuple
+
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
-from typing import Tuple
-import difflib
-import datetime
 
 
 def find_best_team_match(
@@ -76,9 +76,7 @@ def fetch_session_ids_for_fixtures(
                 )
             continue
 
-        name_team_home = row.get("name_team_home") or home_list[0].get(
-            "nameFullLocal"
-        )
+        name_team_home = row.get("name_team_home") or home_list[0].get("nameFullLocal")
         if not name_team_home:
             if logger:
                 logger.error(
@@ -113,11 +111,7 @@ def fetch_session_ids_for_fixtures(
                     matched_name,
                     similarity_score,
                 )
-        col = (
-            "start_time_local"
-            if "start_time_local" in row
-            else "startTimeLocal"
-        )
+        col = "start_time_local" if "start_time_local" in row else "startTimeLocal"
         start_local = pd.to_datetime(row.get(col))
         if pd.isna(start_local):
             if logger:
@@ -132,9 +126,7 @@ def fetch_session_ids_for_fixtures(
                     start_local,
                 )
             continue
-        date_game_start = start_local.replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        date_game_start = start_local.replace(hour=0, minute=0, second=0, microsecond=0)
         date_game_end = date_game_start.date() + pd.Timedelta(hours=24)
         dt_start = datetime.datetime.fromisoformat(str(date_game_start))
         dt_end = datetime.datetime.fromisoformat(str(date_game_end))
@@ -146,9 +138,7 @@ def fetch_session_ids_for_fixtures(
                 dt_start,
                 dt_end,
             )
-        sessions = api.get_sessions_for_team(
-            id_team_home, start=dt_start, end=dt_end
-        )
+        sessions = api.get_sessions_for_team(id_team_home, start=dt_start, end=dt_end)
         if len(sessions) == 0:
             if logger:
                 logger.info(
@@ -167,24 +157,18 @@ def fetch_session_ids_for_fixtures(
             # group_names may be list or string
             group_names = df_session.get("group_names")
             group_names = (
-                group_names.values[0]
-                if isinstance(group_names, pd.Series)
-                else None
+                group_names.values[0] if isinstance(group_names, pd.Series) else None
             )
             if isinstance(group_names, str):
                 group_names = [group_names]
             if group_names is None:
                 group_names = []
 
-            if (name_team_home in group_names) or (
-                matched_name in group_names
-            ):
+            if (name_team_home in group_names) or (matched_name in group_names):
                 # session id sometimes appears as 'session_id'
                 sid_series = df_session.get("session_id")
                 sid = (
-                    sid_series.values[0]
-                    if isinstance(sid_series, pd.Series)
-                    else None
+                    sid_series.values[0] if isinstance(sid_series, pd.Series) else None
                 )
                 sid = int(sid) if sid is not None else None
                 found = True

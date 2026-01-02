@@ -1,7 +1,8 @@
 # assets_sportradar_raw.py
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -9,7 +10,6 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.pipelines.normalized.match_detected_shots import (
     normalize_match_detected_shots as normalize_match_detected_shots_fn,
@@ -53,9 +53,7 @@ def match_detected_shots_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview": MetadataValue.md(
-                df_normalized.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_normalized.head().to_markdown(index=False)),
         }
     )
 
@@ -76,9 +74,7 @@ def check_match_detected_shots_normalized(
         "validated",
     }
 
-    missing_columns = required_columns - set(
-        match_detected_shots_normalized.columns
-    )
+    missing_columns = required_columns - set(match_detected_shots_normalized.columns)
     if missing_columns:
         return AssetCheckResult(
             passed=False,
@@ -110,9 +106,7 @@ def check_match_detected_shots_normalized(
         )
 
     # Data sanity
-    null_validated = int(
-        match_detected_shots_normalized["validated"].isna().sum()
-    )
+    null_validated = int(match_detected_shots_normalized["validated"].isna().sum())
 
     return AssetCheckResult(
         passed=True,

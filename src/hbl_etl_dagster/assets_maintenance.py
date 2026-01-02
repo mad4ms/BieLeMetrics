@@ -1,11 +1,8 @@
-from dagster import (
-    asset,
-    AssetExecutionContext,
-    MetadataValue,
-)
 import pandas as pd
-from .utils.player_league_mapper import PlayerLeagueMapper
+from dagster import AssetExecutionContext, MetadataValue, asset
+
 from .utils.duckdb_helpers import duckdb_conn
+from .utils.player_league_mapper import PlayerLeagueMapper
 
 
 @asset(

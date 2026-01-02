@@ -1,18 +1,15 @@
-from dagster import (
-    Field,
-    asset,
-    AssetExecutionContext,
-    MetadataValue,
-)
+from typing import Optional
+
 import pandas as pd
+from dagster import AssetExecutionContext, Field, MetadataValue, asset
+
 from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
-from typing import Optional
 
 from .assets_sportradar_slow import fixtures_partition_def
-from .utils.metadata import preview_metadata
 from .utils.kinexon_loader import load_missing_positions
+from .utils.metadata import preview_metadata
 
 
 @asset(
@@ -54,9 +51,7 @@ def kinexon_positions(
     df_fixture = df_fixtures[df_fixtures["fixture_id"] == fixture_id]
 
     if df_fixture.empty:
-        context.log.warning(
-            f"Fixture {fixture_id} not found in fixtures asset."
-        )
+        context.log.warning(f"Fixture {fixture_id} not found in fixtures asset.")
         return None
 
     # Check if session_id exists
@@ -107,9 +102,7 @@ def kinexon_positions(
             "n_distinct_sessions": stats["n_distinct_sessions"],
             "n_existing_sessions_before": stats["n_existing_sessions_before"],
             "n_sessions_in_fixtures": stats["n_sessions_in_fixtures"],
-            "n_sessions_fetched_this_run": stats[
-                "n_sessions_fetched_this_run"
-            ],
+            "n_sessions_fetched_this_run": stats["n_sessions_fetched_this_run"],
             "preview": MetadataValue.md(stats["preview_md"]),
         }
     )
@@ -145,20 +138,14 @@ def kinexon_events(
     df_fixture = df_fixtures[df_fixtures["fixture_id"] == fixture_id]
 
     if df_fixture.empty:
-        context.log.warning(
-            f"Fixture {fixture_id} not found in fixtures asset."
-        )
+        context.log.warning(f"Fixture {fixture_id} not found in fixtures asset.")
         return None
 
     # session_ids in kinexon_positions
-    list_session_ids_in_positions = (
-        df_fixture["session_id"].dropna().unique().tolist()
-    )
+    list_session_ids_in_positions = df_fixture["session_id"].dropna().unique().tolist()
 
     if not list_session_ids_in_positions:
-        context.log.warning(
-            f"No session_id for fixture {fixture_id}. Skipping events."
-        )
+        context.log.warning(f"No session_id for fixture {fixture_id}. Skipping events.")
         return None
 
     event_frames = []
@@ -178,9 +165,7 @@ def kinexon_events(
         event_frames.append(df_events)
 
     if not event_frames:
-        context.log.warning(
-            f"No detected events retrieved for fixture {fixture_id}."
-        )
+        context.log.warning(f"No detected events retrieved for fixture {fixture_id}.")
         return None
 
     df_all_detected_events = pd.concat(event_frames, ignore_index=True)

@@ -1,13 +1,11 @@
-from dagster import (
-    asset,
-    AssetExecutionContext,
-    MetadataValue,
-)
-import pandas as pd
+from typing import Any, Dict
+
 import numpy as np
+import pandas as pd
+from dagster import AssetExecutionContext, MetadataValue, asset
+
 from .assets_sportradar_slow import fixtures_partition_def
 from .utils.metadata import preview_metadata
-from typing import Dict, Any
 
 GOAL_Y: float = 10.0
 GOAL_WIDTH: float = 3.0  # meters between posts
@@ -19,9 +17,7 @@ def euclidean_distance(x1: float, y1: float, x2: float, y2: float) -> float:
     return float(np.hypot(dx, dy))
 
 
-def angle_from_to(
-    x_from: float, y_from: float, x_to: float, y_to: float
-) -> float:
+def angle_from_to(x_from: float, y_from: float, x_to: float, y_to: float) -> float:
     """Angle (in rad) of vector from (x_from, y_from) to (x_to, y_to)."""
     return float(np.arctan2(y_to - y_from, x_to - x_from))
 
@@ -110,9 +106,7 @@ def features_at_throw_time(
                 [fixture_id],
             ).df()
     except Exception as e:  # noqa: BLE001
-        context.log.error(
-            f"Error fetching positions for fixture {fixture_id}: {e}"
-        )
+        context.log.error(f"Error fetching positions for fixture {fixture_id}: {e}")
         return pd.DataFrame()
 
     if df_positions.empty:
@@ -143,12 +137,8 @@ def features_at_throw_time(
     ]
 
     fixtures_sportradar = fixtures_sportradar.copy()
-    fixtures_sportradar["fixture_id"] = fixtures_sportradar[
-        "fixture_id"
-    ].astype(str)
-    fixture_info = fixtures_sportradar[
-        fixtures_sportradar["fixture_id"] == fixture_id
-    ]
+    fixtures_sportradar["fixture_id"] = fixtures_sportradar["fixture_id"].astype(str)
+    fixture_info = fixtures_sportradar[fixtures_sportradar["fixture_id"] == fixture_id]
 
     context.log.info(
         "Calculating features for fixture %s with %d events and %d positions.",
@@ -214,9 +204,7 @@ def features_at_throw_time(
             continue
 
         # ball id is where group name == "Ball"
-        position_ball = positions_at_event[
-            positions_at_event["group name"] == "Ball"
-        ]
+        position_ball = positions_at_event[positions_at_event["group name"] == "Ball"]
         if position_ball.empty:
             skipped_events += 1
             continue
@@ -243,9 +231,7 @@ def features_at_throw_time(
         angle_player_straight = handball_shot_angle_deg(
             thrower_x, thrower_y, goal_x, goal_y
         )
-        angle_ball_straight = handball_shot_angle_deg(
-            ball_x, ball_y, goal_x, goal_y
-        )
+        angle_ball_straight = handball_shot_angle_deg(ball_x, ball_y, goal_x, goal_y)
 
         # Triangle: ball + two posts
         half_width = GOAL_WIDTH / 2.0
@@ -264,9 +250,7 @@ def features_at_throw_time(
         # Count other players (exclude thrower, goalkeeper, and ball)
         other_positions = positions_at_event[
             (positions_at_event["group name"] != "Ball")
-            & ~positions_at_event["league id"].isin(
-                [id_thrower, id_goalkeeper]
-            )
+            & ~positions_at_event["league id"].isin([id_thrower, id_goalkeeper])
         ]
 
         name_team_thrower = position_thrower["group name"].iloc[0]

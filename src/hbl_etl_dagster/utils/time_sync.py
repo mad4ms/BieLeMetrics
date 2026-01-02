@@ -1,7 +1,7 @@
 # time_sync.py
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -54,9 +54,7 @@ def _merge_closest_time(
         return out
 
     # Sort Kinexon by time for deterministic behavior
-    kin = kin.sort_values(kin_time_col, kind="mergesort").reset_index(
-        drop=True
-    )
+    kin = kin.sort_values(kin_time_col, kind="mergesort").reset_index(drop=True)
     kin_times = kin[kin_time_col].to_numpy(dtype="int64")
 
     goal_times = out[goal_time_col].to_numpy()
@@ -156,11 +154,7 @@ def sync_goals_with_kinexon(
         out["match_mode"] = "no_kinexon"
         return out
 
-    ev = (
-        df_events.copy()
-        .reset_index(drop=False)
-        .rename(columns={"index": "__row"})
-    )
+    ev = df_events.copy().reset_index(drop=False).rename(columns={"index": "__row"})
     kin = df_kinexon.copy()
 
     has_player_matching = (goal_player_col in ev.columns) and (
@@ -187,9 +181,7 @@ def sync_goals_with_kinexon(
     parts: List[pd.DataFrame] = []
 
     # groupby(dropna=False) to avoid silently dropping NaN player ids
-    for pid, goals_grp in ev.groupby(
-        goal_player_col, dropna=False, sort=False
-    ):
+    for pid, goals_grp in ev.groupby(goal_player_col, dropna=False, sort=False):
         goals_base = goals_grp.drop(columns=["__row"]).reset_index(drop=True)
 
         if pd.isna(pid):
@@ -201,9 +193,7 @@ def sync_goals_with_kinexon(
                 goal_time_col=goal_time_col,
                 kin_time_col=kin_time_col,
             )
-            merged["match_mode"] = np.where(
-                merged["matched"], "time_only", "time_only"
-            )
+            merged["match_mode"] = np.where(merged["matched"], "time_only", "time_only")
         else:
             kin_sub = kin[kin[kin_player_col] == pid]
             if kin_sub.empty:
@@ -277,8 +267,6 @@ def sync_goals_with_kinexon(
 
     # Hard invariant: row-preserving
     if len(out) != len(df_events):
-        raise RuntimeError(
-            f"Row-count changed: in={len(df_events)} out={len(out)}"
-        )
+        raise RuntimeError(f"Row-count changed: in={len(df_events)} out={len(out)}")
 
     return out

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
-import pandas as pd
 
+import pandas as pd
 from sportradar_datacore_api.handball import HandballAPI
 
 
@@ -42,17 +42,13 @@ def fetch_teams_by_season_id(api: HandballAPI, season_id: str) -> pd.DataFrame:
         df_details = pd.json_normalize(team_details[0].to_dict())
 
         # keep only known cols
-        cols_present = [
-            c for c in columns_map.keys() if c in df_details.columns
-        ]
+        cols_present = [c for c in columns_map.keys() if c in df_details.columns]
         df_details = df_details[cols_present]
 
         # rename to snake_case
         df_details = df_details.rename(columns=columns_map)
 
-        df_teams_snake = pd.concat(
-            [df_teams_snake, df_details], ignore_index=True
-        )
+        df_teams_snake = pd.concat([df_teams_snake, df_details], ignore_index=True)
 
     if df_teams_snake.empty:
         raise ValueError(f"No teams found for season ID '{season_id}'.")

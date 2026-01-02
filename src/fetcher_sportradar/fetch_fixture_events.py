@@ -2,12 +2,11 @@
 
 import logging
 from typing import List, Tuple
+
 import pandas as pd
 from tqdm import tqdm
 
-from fetcher_sportradar.fetch_players import (
-    get_players_for_fixture,
-)
+from fetcher_sportradar.fetch_players import get_players_for_fixture
 
 
 def fetch_events_for_fixture(api, fixture_id: str) -> list:
@@ -88,9 +87,7 @@ def process_fixture_events(
         and "name_full_local" in df_teams.columns
     ):
         # make both columns same type for merging: str
-        df_fixture_events["entity_id"] = df_fixture_events["entity_id"].astype(
-            str
-        )
+        df_fixture_events["entity_id"] = df_fixture_events["entity_id"].astype(str)
         df_teams["entity_id"] = df_teams["entity_id"].astype(str)
         df_fixture_events = df_fixture_events.merge(
             df_teams[["entity_id", "name_full_local"]],
@@ -125,9 +122,7 @@ def process_fixture_events(
         ).rename(columns={"name_full_local": "goalkeeper_name"})
         # drop helper column if created
         if "person_id_goalkeeper" in df_fixture_events.columns:
-            df_fixture_events = df_fixture_events.drop(
-                columns=["person_id_goalkeeper"]
-            )
+            df_fixture_events = df_fixture_events.drop(columns=["person_id_goalkeeper"])
     else:
         df_fixture_events["person_name"] = None
         df_fixture_events["goalkeeper_name"] = None
@@ -217,9 +212,7 @@ def fetch_list_fixture_events_multithreaded(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_fixture = {
-            executor.submit(
-                fetch_events_for_fixture, api, fixture_id
-            ): fixture_id
+            executor.submit(fetch_events_for_fixture, api, fixture_id): fixture_id
             for fixture_id in fixture_ids
         }
 
@@ -243,9 +236,7 @@ def fetch_list_fixture_events_multithreaded(
                     all_players.append(df_players)
 
             except Exception as e:
-                logging.error(
-                    "Error processing fixture ID %s: %s", fixture_id, e
-                )
+                logging.error("Error processing fixture ID %s: %s", fixture_id, e)
 
     if not all_match_events:
         return pd.DataFrame(), pd.DataFrame()
@@ -292,13 +283,9 @@ def fetch_and_process_fixture_events_multithreaded(
             match_events_raw = fetch_events_for_fixture(api, fixture_id)
             if not match_events_raw:
                 return None
-            return process_fixture_events(
-                fixture_id, match_events_raw, df_teams, api
-            )
+            return process_fixture_events(fixture_id, match_events_raw, df_teams, api)
         except Exception as e:
-            logging.exception(
-                "Worker failed for fixture %s: %s", fixture_id, e
-            )
+            logging.exception("Worker failed for fixture %s: %s", fixture_id, e)
             return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:

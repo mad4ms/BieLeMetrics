@@ -1,13 +1,15 @@
+import difflib
 import logging
-from typing import Dict, Optional, Tuple, List
+from collections.abc import Iterable
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-import difflib
 
 DEFAULT_TEAM_NAME_MAPPING = {
     "Handball Sport Verein Hamburg": "HSV Hamburg",
     "Minden": "TSV GWD Minden",
     "Göppingen": "FRISCH AUF Göppingen",
+    "SC DHFK Leipzig": "SC DHfK Leipzig",
 }
 
 _team_name_mapping = DEFAULT_TEAM_NAME_MAPPING.copy()
@@ -135,6 +137,17 @@ COLS_TO_DROP = [
 ]
 
 
+def _safe_next(comps, predicate, value_fn):
+    if not isinstance(comps, Iterable):
+        return None
+
+    for c in comps:
+        if isinstance(c, dict) and predicate(c):
+            return value_fn(c)
+
+    return None
+
+
 def normalize_matches(
     df_fixtures_sportradar_raw: pd.DataFrame,
     df_sessions_kinexon_raw: pd.DataFrame,
@@ -197,39 +210,31 @@ def normalize_matches(
     merged = merged.astype("object").where(merged.notna(), None)
 
     merged["entity_id_home_sportradar"] = merged["competitors"].apply(
-        lambda comps: next(
-            (comp["entityId"] for comp in comps if comp.get("isHome") == True),
-            None,
+        lambda comps: _safe_next(
+            comps,
+            lambda c: c.get("isHome") is True,
+            lambda c: c["entityId"],
         )
     )
     merged["entity_id_away_sportradar"] = merged["competitors"].apply(
-        lambda comps: next(
-            (
-                comp["entityId"]
-                for comp in comps
-                if comp.get("isHome") == False
-            ),
-            None,
+        lambda comps: _safe_next(
+            comps,
+            lambda c: c.get("isHome") is False,
+            lambda c: c["entityId"],
         )
     )
     merged["score_home_sportradar"] = merged["competitors"].apply(
-        lambda comps: next(
-            (
-                int(comp["score"])
-                for comp in comps
-                if comp.get("isHome") == True
-            ),
-            None,
+        lambda comps: _safe_next(
+            comps,
+            lambda c: c.get("isHome") is True and "score" in c,
+            lambda c: int(c["score"]),
         )
     )
     merged["score_away_sportradar"] = merged["competitors"].apply(
-        lambda comps: next(
-            (
-                int(comp["score"])
-                for comp in comps
-                if comp.get("isHome") == False
-            ),
-            None,
+        lambda comps: _safe_next(
+            comps,
+            lambda c: c.get("isHome") is False and "score" in c,
+            lambda c: int(c["score"]),
         )
     )
 

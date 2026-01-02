@@ -1,31 +1,27 @@
 import json
 import os
+
 import duckdb
 from dagster import (
-    sensor,
-    SensorEvaluationContext,
-    RunRequest,
     AssetSelection,
-    DefaultSensorStatus,
-    RunsFilter,
     DagsterRunStatus,
+    DefaultSensorStatus,
+    RunRequest,
+    RunsFilter,
+    SensorEvaluationContext,
+    sensor,
 )
-from .assets_sportradar import (
-    fixture_events_sportradar,
-    fixture_players_sportradar,
-)
-from .assets_kinexon import kinexon_positions, kinexon_events
+
+from .assets_kinexon import kinexon_events, kinexon_positions
+from .assets_sportradar import fixture_events_sportradar, fixture_players_sportradar
+from .assets_sportradar_slow import fixtures_partition_def
 from .assets_sync import (
     players_merged,
-    sportradar_goals_synced,
     sportradar_goals_refined,
+    sportradar_goals_synced,
 )
-from .assets_sportradar_slow import fixtures_partition_def
 
-
-FIXTURE_RUN_CONCURRENCY_LIMIT = int(
-    os.getenv("FIXTURE_RUN_CONCURRENCY_LIMIT", "1")
-)
+FIXTURE_RUN_CONCURRENCY_LIMIT = int(os.getenv("FIXTURE_RUN_CONCURRENCY_LIMIT", "1"))
 
 
 @sensor(

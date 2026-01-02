@@ -1,17 +1,11 @@
-from dagster import (
-    Any,
-    Dict,
-    List,
-    asset,
-    AssetExecutionContext,
-    MetadataValue,
-)
 import pandas as pd
+from dagster import Any, AssetExecutionContext, Dict, List, MetadataValue, asset
+
 from .assets_sportradar_slow import fixtures_partition_def
-from .utils.metadata import preview_metadata
 from .utils.matching import fuzzy_match_players_to_positions
-from .utils.time_sync import sync_goals_with_kinexon
+from .utils.metadata import preview_metadata
 from .utils.sportradar_kinexon_event_mapper import refine_throw_time_for_event
+from .utils.time_sync import sync_goals_with_kinexon
 
 
 @asset(
@@ -148,12 +142,8 @@ def players_merged(
     )
     context.add_output_metadata(
         {
-            "total_unique_players_updated_with_league_id": len(
-                df_players_matched
-            ),
-            "n_players_in_raw_kinexon_positions": len(
-                df_kin_player_in_positions
-            ),
+            "total_unique_players_updated_with_league_id": len(df_players_matched),
+            "n_players_in_raw_kinexon_positions": len(df_kin_player_in_positions),
             "n_players_in_fixture_events": len(df_players_fixture),
         }
     )
@@ -188,12 +178,8 @@ def sportradar_goals_synced(
     kinexon_events = kinexon_events[kinexon_events["fixture_id"] == fixture_id]
     players_merged["fixture_id"] = players_merged["fixture_id"].astype(str)
     players_merged = players_merged[players_merged["fixture_id"] == fixture_id]
-    fixtures_sportradar["fixture_id"] = fixtures_sportradar[
-        "fixture_id"
-    ].astype(str)
-    fixture_info = fixtures_sportradar[
-        fixtures_sportradar["fixture_id"] == fixture_id
-    ]
+    fixtures_sportradar["fixture_id"] = fixtures_sportradar["fixture_id"].astype(str)
+    fixture_info = fixtures_sportradar[fixtures_sportradar["fixture_id"] == fixture_id]
 
     context.log.info(
         "Starting goal sync for fixture %s. Sportradar events: %d, Kinexon events: %d, Players merged: %d",
@@ -217,9 +203,7 @@ def sportradar_goals_synced(
         else None
     )
     start_time_kinexon = (
-        pd.to_datetime(
-            kinexon_events["timestamp_ms"].min(), unit="ms", utc=True
-        )
+        pd.to_datetime(kinexon_events["timestamp_ms"].min(), unit="ms", utc=True)
         if not kinexon_events.empty
         else None
     )
@@ -239,9 +223,7 @@ def sportradar_goals_synced(
     df_goals["event_time"] = pd.to_datetime(
         df_goals["event_time"], format="ISO8601", utc=True, errors="coerce"
     )
-    df_goals["event_time_ms"] = (
-        df_goals["event_time"].astype("int64") // 1_000_000
-    )
+    df_goals["event_time_ms"] = df_goals["event_time"].astype("int64") // 1_000_000
     df_goals = df_goals.dropna(subset=["event_time_ms", "fixture_id"])
     df_goals["fixture_id"] = df_goals["fixture_id"].astype(str)
 
@@ -252,9 +234,7 @@ def sportradar_goals_synced(
         player_league_map = {}
     else:
         context.log.debug(f"players_merged shape: {players_merged.shape}")
-        context.log.debug(
-            f"players_merged columns: {players_merged.columns.tolist()}"
-        )
+        context.log.debug(f"players_merged columns: {players_merged.columns.tolist()}")
         context.log.debug(
             f"Non-null 'kin_league_id' count: {players_merged['kin_league_id'].notna().sum()}"
         )
@@ -284,9 +264,7 @@ def sportradar_goals_synced(
     context.log.info(
         f"Mapping league IDs for goalkeepers and shooters for fixture {fixture_id}."
     )
-    df_goals["goalkeeper_league_id"] = df_goals["goalkeeper_id"].map(
-        player_league_map
-    )
+    df_goals["goalkeeper_league_id"] = df_goals["goalkeeper_id"].map(player_league_map)
 
     df_goals["person_league_id"] = df_goals["person_id"].map(player_league_map)
 
@@ -318,9 +296,7 @@ def sportradar_goals_synced(
         f"Dropped Kinexon events with invalid timestamps for fixture {fixture_id}."
         f" Remaining events: {len(df_kinexon_events)}"
     )
-    df_kinexon_events["fixture_id"] = df_kinexon_events["fixture_id"].astype(
-        str
-    )
+    df_kinexon_events["fixture_id"] = df_kinexon_events["fixture_id"].astype(str)
 
     tolerance_ms = (context.op_config or {}).get("tolerance_ms", 30_000)
 
@@ -373,9 +349,7 @@ def sportradar_goals_synced(
             "teams": competitors,
             "round_number": round_number,
             "preview": (
-                MetadataValue.md(
-                    df_final_synced.head(10).to_markdown(index=False)
-                )
+                MetadataValue.md(df_final_synced.head(10).to_markdown(index=False))
                 if not df_final_synced.empty
                 else MetadataValue.md("*(empty)*")
             ),
@@ -445,9 +419,7 @@ def sportradar_goals_refined(
                     f"SELECT * FROM kinexon_positions WHERE fixtureId = '{f_id}'"
                 ).df()
         except Exception as e:
-            context.log.error(
-                f"Error fetching positions for fixture {f_id}: {e}"
-            )
+            context.log.error(f"Error fetching positions for fixture {f_id}: {e}")
             df_positions = pd.DataFrame()
 
         if df_positions.empty:
@@ -506,9 +478,7 @@ def sportradar_goals_refined(
             if df_events_p1_gk.empty or len(goalkeeper_league_ids) == 0:
                 last_event_p1 = None
             else:
-                last_event_p1 = df_events_p1_gk.sort_values(
-                    "event_time_ms"
-                ).iloc[-1]
+                last_event_p1 = df_events_p1_gk.sort_values("event_time_ms").iloc[-1]
 
             if last_event_p1 is not None:
                 split_ts_ms = int(last_event_p1["event_time_ms"])
@@ -517,12 +487,8 @@ def sportradar_goals_refined(
 
             # --- build df_pos_period1 / df_pos_period2 ---
             if split_ts_ms is not None:
-                df_pos_period1 = df_positions[
-                    df_positions["ts in ms"] <= split_ts_ms
-                ]
-                df_pos_period2 = df_positions[
-                    df_positions["ts in ms"] > split_ts_ms
-                ]
+                df_pos_period1 = df_positions[df_positions["ts in ms"] <= split_ts_ms]
+                df_pos_period2 = df_positions[df_positions["ts in ms"] > split_ts_ms]
             else:
                 df_pos_period1 = df_positions.head(0)
                 df_pos_period2 = df_positions.head(0)
@@ -563,14 +529,10 @@ def sportradar_goals_refined(
                 # Merge diag_series into row
                 combined = pd.concat([row, diag_series])
                 # Remove duplicate index labels (keep last/refined)
-                combined = combined.loc[
-                    ~combined.index.duplicated(keep="last")
-                ]
+                combined = combined.loc[~combined.index.duplicated(keep="last")]
                 refined_rows.append(combined)
             except Exception as e:
-                context.log.error(
-                    f"Error refining event {row.get('eventId')}: {e}"
-                )
+                context.log.error(f"Error refining event {row.get('eventId')}: {e}")
                 refined_rows.append(row)
 
     if not refined_rows:
@@ -611,9 +573,7 @@ def positions_for_throw_time(
 
     df_fixture_info = fixtures_sportradar.copy()
     df_fixture_info["fixture_id"] = df_fixture_info["fixture_id"].astype(str)
-    df_fixture_info = df_fixture_info[
-        df_fixture_info["fixture_id"] == fixture_id
-    ]
+    df_fixture_info = df_fixture_info[df_fixture_info["fixture_id"] == fixture_id]
 
     # Create timestamp-to-eventId mapping
     df_map = (
@@ -664,8 +624,7 @@ def positions_for_throw_time(
     if (
         not df_fixture_info.empty
         and "name_team_home" in df_fixture_info.columns
-        and df_fixture_info["name_team_home"].iloc[0]
-        == "SG Flensburg-Handewitt"
+        and df_fixture_info["name_team_home"].iloc[0] == "SG Flensburg-Handewitt"
     ):
         context.log.info(
             f"Applying y-axis offset fix for fixture {fixture_id} (SG Flensburg-Handewitt home)."
@@ -684,9 +643,7 @@ def positions_for_throw_time(
     merged_with_event = df_merged["event_id"].notna().sum()
     missing_event = df_merged["event_id"].isna().sum()
 
-    coverage_ratio = (
-        merged_with_event / len(df_merged) if len(df_merged) > 0 else 0.0
-    )
+    coverage_ratio = merged_with_event / len(df_merged) if len(df_merged) > 0 else 0.0
 
     # Additional logging
     context.log.info(
@@ -714,7 +671,7 @@ def positions_for_throw_time(
     return df_merged
 
 
-from .utils.goal_rendering import render_goal_with_multifreeze, OUT_DIR
+from .utils.goal_rendering import OUT_DIR, render_goal_with_multifreeze
 
 
 @asset(
@@ -760,9 +717,7 @@ def rendered_throw_videos_first5(
 
     df_fixture_info = fixtures_sportradar.copy()
     df_fixture_info["fixture_id"] = df_fixture_info["fixture_id"].astype(str)
-    df_fixture_info = df_fixture_info[
-        df_fixture_info["fixture_id"] == fixture_id
-    ]
+    df_fixture_info = df_fixture_info[df_fixture_info["fixture_id"] == fixture_id]
 
     # --- restrict to events that actually have positions_for_throw_time rows ---
     df_pos_throw = positions_for_throw_time.copy()
@@ -778,9 +733,7 @@ def rendered_throw_videos_first5(
         return df_goals.head(0)
 
     if "event_id" in df_pos_throw.columns:
-        valid_event_ids = (
-            df_pos_throw["event_id"].dropna().drop_duplicates().tolist()
-        )
+        valid_event_ids = df_pos_throw["event_id"].dropna().drop_duplicates().tolist()
         df_goals = df_goals[df_goals["event_id"].isin(valid_event_ids)]
 
     # require refined_throw_ts
@@ -794,16 +747,12 @@ def rendered_throw_videos_first5(
         return df_goals.head(0)
 
     # --- pick first five events (sorted by event_time, fallback to refined_throw_ts) ---
-    sort_cols = [
-        c for c in ["event_time", "refined_throw_ts"] if c in df_goals.columns
-    ]
+    sort_cols = [c for c in ["event_time", "refined_throw_ts"] if c in df_goals.columns]
     if sort_cols:
         df_goals = df_goals.sort_values(sort_cols)
     df_goals = df_goals.head(5)
 
-    context.log.info(
-        f"Rendering {len(df_goals)} events for fixture {fixture_id}."
-    )
+    context.log.info(f"Rendering {len(df_goals)} events for fixture {fixture_id}.")
 
     # --- load kinexon_positions once for this fixture ---
     duckdb_io_manager = context.resources.io_manager
@@ -826,8 +775,7 @@ def rendered_throw_videos_first5(
     if (
         not df_fixture_info.empty
         and "name_team_home" in df_fixture_info.columns
-        and df_fixture_info["name_team_home"].iloc[0]
-        == "SG Flensburg-Handewitt"
+        and df_fixture_info["name_team_home"].iloc[0] == "SG Flensburg-Handewitt"
     ):
         context.log.info(
             f"Applying y-axis offset fix for fixture {fixture_id} (SG Flensburg-Handewitt home)."
@@ -838,9 +786,7 @@ def rendered_throw_videos_first5(
 
     for _, row in df_goals.iterrows():
         event_id = row.get("event_id")
-        context.log.info(
-            f"Rendering event_id={event_id} for fixture {fixture_id}."
-        )
+        context.log.info(f"Rendering event_id={event_id} for fixture {fixture_id}.")
 
         freeze_markers: List[Dict[str, Any]] = []
 
@@ -878,9 +824,7 @@ def rendered_throw_videos_first5(
             )
 
         if not freeze_markers:
-            context.log.warning(
-                f"Event {event_id}: no valid freeze markers, skipping."
-            )
+            context.log.warning(f"Event {event_id}: no valid freeze markers, skipping.")
             continue
 
         out_path = render_goal_with_multifreeze(
@@ -905,9 +849,7 @@ def rendered_throw_videos_first5(
         )
 
     if not rendered_records:
-        context.log.warning(
-            f"No renders were produced for fixture {fixture_id}."
-        )
+        context.log.warning(f"No renders were produced for fixture {fixture_id}.")
         return df_goals.head(0)
 
     df_rendered = pd.DataFrame(rendered_records)
@@ -917,9 +859,7 @@ def rendered_throw_videos_first5(
         {
             "n_events_rendered": len(df_rendered),
             "output_dir": str(OUT_DIR),
-            "events": ", ".join(
-                str(e) for e in df_rendered["event_id"].tolist()
-            ),
+            "events": ", ".join(str(e) for e in df_rendered["event_id"].tolist()),
         }
     )
 

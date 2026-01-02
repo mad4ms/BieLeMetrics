@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher, get_close_matches
 from typing import Tuple
 
 import pandas as pd
-from difflib import get_close_matches, SequenceMatcher
 
 
 def _norm(s: str) -> str:
@@ -46,29 +46,25 @@ class PlayerLeagueMapper:
     def build_kinexon_per_name(self) -> pd.DataFrame:
         df_kx_all = self.con.execute(
             """
-            SELECT 
-                "full name"  AS full_name_kinexon, 
-                "group name" AS group_name_kinexon, 
-                "league id"  AS league_id, 
-                session_id, 
+            SELECT
+                "full name"  AS full_name_kinexon,
+                "group name" AS group_name_kinexon,
+                "league id"  AS league_id,
+                session_id,
                 fixtureId
             FROM kinexon_positions
-            WHERE "full name" IS NOT NULL 
+            WHERE "full name" IS NOT NULL
               AND "league id" IS NOT NULL
               AND "group name" IS NOT NULL
             """
         ).fetch_df()
 
         if df_kx_all.empty:
-            self.logger.warning(
-                "No Kinexon player rows found in kinexon_positions."
-            )
+            self.logger.warning("No Kinexon player rows found in kinexon_positions.")
             return df_kx_all
 
         df_kx_all["league_id"] = df_kx_all["league_id"].astype(str)
-        df_kx_all["group_name_kinexon"] = df_kx_all[
-            "group_name_kinexon"
-        ].astype(str)
+        df_kx_all["group_name_kinexon"] = df_kx_all["group_name_kinexon"].astype(str)
 
         kx_ids_per_name = (
             df_kx_all.groupby("full_name_kinexon")["league_id"]
@@ -94,42 +90,32 @@ class PlayerLeagueMapper:
         )
 
         kx_per_name["norm_key"] = kx_per_name["full_name_kinexon"].map(_norm)
-        kx_per_name["kin_group_norm"] = kx_per_name["group_name_kinexon"].map(
-            _norm
-        )
+        kx_per_name["kin_group_norm"] = kx_per_name["group_name_kinexon"].map(_norm)
 
-        self.logger.info(
-            "KINEXON: distinct player names: %d", len(kx_per_name)
-        )
+        self.logger.info("KINEXON: distinct player names: %d", len(kx_per_name))
         return kx_per_name
 
     def load_sportradar_players(self) -> pd.DataFrame:
         df_sr_players = self.con.execute(
             """
-            SELECT DISTINCT 
-                p.personId, 
-                p.nameFullLocal, 
-                p.nameFullLatin, 
+            SELECT DISTINCT
+                p.personId,
+                p.nameFullLocal,
+                p.nameFullLatin,
                 p.teamName
             FROM players AS p
-            JOIN match_events AS me 
+            JOIN match_events AS me
               ON p.personId = me.personId
             """
         ).fetch_df()
 
         if df_sr_players.empty:
-            self.logger.warning(
-                "No Sportradar players referenced in match_events."
-            )
+            self.logger.warning("No Sportradar players referenced in match_events.")
             return df_sr_players
 
-        df_sr_players["nameFullLocal"] = df_sr_players["nameFullLocal"].astype(
-            str
-        )
+        df_sr_players["nameFullLocal"] = df_sr_players["nameFullLocal"].astype(str)
         df_sr_players["teamName"] = df_sr_players["teamName"].astype(str)
-        df_sr_players["name_local_norm"] = df_sr_players["nameFullLocal"].map(
-            _norm
-        )
+        df_sr_players["name_local_norm"] = df_sr_players["nameFullLocal"].map(_norm)
         df_sr_players["team_norm"] = df_sr_players["teamName"].map(_norm)
 
         self.logger.info(
@@ -195,17 +181,13 @@ class PlayerLeagueMapper:
 
             # Fuzzy: restrict search to same team
             eligible_keys = [
-                kk
-                for kk in kin_keys
-                if kin_map_key_to_team.get(kk) == sr_team_norm
+                kk for kk in kin_keys if kin_map_key_to_team.get(kk) == sr_team_norm
             ]
 
             if not eligible_keys:
                 continue
 
-            cand = get_close_matches(
-                key_local, eligible_keys, n=1, cutoff=0.84
-            )
+            cand = get_close_matches(key_local, eligible_keys, n=1, cutoff=0.84)
             if cand:
                 best_key = cand[0]
                 score = _similarity(key_local, best_key)
@@ -241,9 +223,9 @@ class PlayerLeagueMapper:
         ).drop_duplicates(subset=["personId"], keep="first")
 
         df_map_safe = df_match_all.copy()
-        df_map_safe["team_norm_sportradar"] = df_map_safe[
-            "teamName_sportradar"
-        ].map(_norm)
+        df_map_safe["team_norm_sportradar"] = df_map_safe["teamName_sportradar"].map(
+            _norm
+        )
 
         df_map_safe = df_map_safe.loc[
             df_map_safe["team_norm_sportradar"]
@@ -270,15 +252,11 @@ class PlayerLeagueMapper:
         players subset (league_id IS NOT NULL).
         """
         if df_map_safe.empty:
-            self.logger.warning(
-                "No safe mappings to apply to players.league_id."
-            )
+            self.logger.warning("No safe mappings to apply to players.league_id.")
             return pd.DataFrame()
 
         # Reset league_id column
-        self.con.execute(
-            """ALTER TABLE players DROP COLUMN IF EXISTS league_id"""
-        )
+        self.con.execute("""ALTER TABLE players DROP COLUMN IF EXISTS league_id""")
         self.con.execute(
             """ALTER TABLE players ADD COLUMN IF NOT EXISTS league_id TEXT"""
         )
@@ -325,9 +303,7 @@ class PlayerLeagueMapper:
         kx_per_name = self.build_kinexon_per_name()
         df_sr_players = self.load_sportradar_players()
 
-        df_match_all, df_map_safe = self.match_players(
-            kx_per_name, df_sr_players
-        )
+        df_match_all, df_map_safe = self.match_players(kx_per_name, df_sr_players)
         df_players_updated = self.apply_updates(df_map_safe)
 
         return df_match_all, df_map_safe, df_players_updated

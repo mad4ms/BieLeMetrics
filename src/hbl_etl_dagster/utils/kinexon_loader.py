@@ -1,12 +1,10 @@
-import os
-import pandas as pd
-from typing import Dict, Any, Optional, Callable, ContextManager
 import logging
+import os
+from typing import Any, Callable, ContextManager, Dict, Optional
 
-from src.fetcher_kinexon.fetch_positions_for_fixture import (
-    fetch_positions_for_fixture,
-)
+import pandas as pd
 
+from src.fetcher_kinexon.fetch_positions_for_fixture import fetch_positions_for_fixture
 
 ConnFactory = Callable[[], ContextManager]
 
@@ -58,9 +56,7 @@ def load_missing_positions(
     session_id = str(df_fixture["session_id"].iloc[0])
 
     os.makedirs(cache_dir, exist_ok=True)
-    cache_path = os.path.join(
-        cache_dir, f"kinexon_positions_{session_id}.parquet.gzip"
-    )
+    cache_path = os.path.join(cache_dir, f"kinexon_positions_{session_id}.parquet.gzip")
 
     # -------------------------
     # 1) Short DB existence check (lock held briefly)
@@ -137,9 +133,7 @@ def load_missing_positions(
     # Fix your parquet issue: if "league id" can contain strings like "ball"
     # force it to string consistently (prevents pyarrow mixed-type failures).
     if "league id" in df_positions.columns:
-        df_positions["league id"] = _as_string_series(
-            df_positions["league id"]
-        )
+        df_positions["league id"] = _as_string_series(df_positions["league id"])
 
     df_positions = df_positions.drop_duplicates()
 
@@ -175,9 +169,7 @@ def load_missing_positions(
         df_positions.to_parquet(cache_path, compression="gzip")
     except Exception as e:
         if logger:
-            logger.warning(
-                "Failed to write cache %s: %s (continuing)", cache_path, e
-            )
+            logger.warning("Failed to write cache %s: %s (continuing)", cache_path, e)
 
     # -------------------------
     # 6) Stats + preview (short DB lock)

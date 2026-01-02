@@ -5,10 +5,11 @@ get a DuckDB connection and initialized API client. It's a direct
 translation of the notebook's configuration cells.
 """
 
-from dotenv import load_dotenv
-import os
-import duckdb
 import datetime
+import os
+
+import duckdb
+from dotenv import load_dotenv
 from sportradar_datacore_api.handball import HandballAPI
 
 load_dotenv()
@@ -18,9 +19,7 @@ NAME_SEASON = "DAIKIN HBL 2024/25"
 YEAR_SEASON = int(NAME_SEASON.split()[-1].split("/")[0])
 YEARS_SEASON = NAME_SEASON.split()[-1].replace("/", "-")
 
-PATH_TO_OUTPUT = os.path.join(
-    os.getcwd(), "..", "data", f"season_{YEARS_SEASON}"
-)
+PATH_TO_OUTPUT = os.path.join(os.getcwd(), "..", "data", f"season_{YEARS_SEASON}")
 os.makedirs(PATH_TO_OUTPUT, exist_ok=True)
 
 date = datetime.date.today().strftime("%Y-%m-%d")
@@ -65,12 +64,8 @@ def get_api_kinexon():
             "ENDPOINT_KINEXON_SESSION", "https://hbl-cloud.kinexon.com/api"
         ),
         api_key=os.getenv("API_KEY_KINEXON", "your_api_key_here"),
-        username_basic=os.getenv(
-            "USERNAME_KINEXON_SESSION", "your_username_here"
-        ),
-        password_basic=os.getenv(
-            "PASSWORD_KINEXON_SESSION", "your_password_here"
-        ),
+        username_basic=os.getenv("USERNAME_KINEXON_SESSION", "your_username_here"),
+        password_basic=os.getenv("PASSWORD_KINEXON_SESSION", "your_password_here"),
         username_main=os.getenv("USERNAME_KINEXON_MAIN", "your_username_here"),
         password_main=os.getenv("PASSWORD_KINEXON_MAIN", "your_password_here"),
         endpoint_session=os.getenv(

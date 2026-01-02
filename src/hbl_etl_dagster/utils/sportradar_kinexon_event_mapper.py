@@ -1,18 +1,17 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-import logging
-import numpy as np
-import pandas as pd
+import cv2
 
 # --- plotting / rendering deps ---
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from matplotlib.ticker import FuncFormatter
-import cv2
-
 
 # =============================================================================
 # Core mapper: Sportradar goals ↔ Kinexon detected events
@@ -79,9 +78,7 @@ class SportradarKinexonEventMapper:
               - league_id (may be NaN if unknown)
         """
         if fixture_events.empty:
-            self.logger.warning(
-                "prepare_sportradar_goals(): fixture_events is empty."
-            )
+            self.logger.warning("prepare_sportradar_goals(): fixture_events is empty.")
             return pd.DataFrame()
 
         if players_core is None:
@@ -112,9 +109,7 @@ class SportradarKinexonEventMapper:
             )
             return df_goals
 
-        df_goals["eventTime_ms"] = (
-            df_goals["eventTime"].astype("int64") // 1_000_000
-        )
+        df_goals["eventTime_ms"] = df_goals["eventTime"].astype("int64") // 1_000_000
         df_goals = df_goals.sort_values("eventTime_ms").reset_index(drop=True)
 
         self.logger.info(
@@ -123,9 +118,7 @@ class SportradarKinexonEventMapper:
         )
         return df_goals
 
-    def prepare_kinexon_events(
-        self, kinexon_events: pd.DataFrame
-    ) -> pd.DataFrame:
+    def prepare_kinexon_events(self, kinexon_events: pd.DataFrame) -> pd.DataFrame:
         """
         Prepare Kinexon detected events for time-based merge.
 
@@ -137,9 +130,7 @@ class SportradarKinexonEventMapper:
           - rename success → kin_success to avoid confusion
         """
         if kinexon_events.empty:
-            self.logger.warning(
-                "prepare_kinexon_events(): kinexon_events is empty."
-            )
+            self.logger.warning("prepare_kinexon_events(): kinexon_events is empty.")
             return kinexon_events
 
         df = kinexon_events.copy()
@@ -160,8 +151,7 @@ class SportradarKinexonEventMapper:
             before = len(df)
             df = df.dropna(subset=["validated"]).copy()
             self.logger.info(
-                "prepare_kinexon_events(): kept %d/%d rows with "
-                "non-null validated.",
+                "prepare_kinexon_events(): kept %d/%d rows with " "non-null validated.",
                 len(df),
                 before,
             )
@@ -178,9 +168,7 @@ class SportradarKinexonEventMapper:
 
         df = df.sort_values("timestamp_ms").reset_index(drop=True)
 
-        self.logger.info(
-            "Prepared %d Kinexon events for time-based merge.", len(df)
-        )
+        self.logger.info("Prepared %d Kinexon events for time-based merge.", len(df))
         return df
 
     # --------------------------------------------------------------------- #
@@ -216,15 +204,11 @@ class SportradarKinexonEventMapper:
             time_diff_ms.
         """
         if fixture_events.empty:
-            self.logger.warning(
-                "sync_goals_with_kinexon(): fixture_events is empty."
-            )
+            self.logger.warning("sync_goals_with_kinexon(): fixture_events is empty.")
             return pd.DataFrame()
 
         if kinexon_events.empty:
-            self.logger.warning(
-                "sync_goals_with_kinexon(): kinexon_events is empty."
-            )
+            self.logger.warning("sync_goals_with_kinexon(): kinexon_events is empty.")
             return pd.DataFrame()
 
         players_core = self.load_players_core()
@@ -353,9 +337,7 @@ def seed_time_from_row(row: pd.Series) -> pd.Timestamp:
       3) Else, fall back to Sportradar eventTime.
     """
     if "kinexon_matched_ts" in row and pd.notna(row.get("kinexon_matched_ts")):
-        return pd.to_datetime(
-            row["kinexon_matched_ts"], utc=True, errors="coerce"
-        )
+        return pd.to_datetime(row["kinexon_matched_ts"], utc=True, errors="coerce")
 
     if "kin_timestamp_ms" in row and pd.notna(row.get("kin_timestamp_ms")):
         return pd.to_datetime(
@@ -413,9 +395,7 @@ def build_joined_player_ball(
 
     # Identify ball rows by league-id string
     ball_mask = (
-        df_scene["league id"]
-        .astype(str)
-        .str.contains("ball", case=False, na=False)
+        df_scene["league id"].astype(str).str.contains("ball", case=False, na=False)
     )
     ball = df_scene[ball_mask].copy()
     df_players = df_scene[~ball_mask]
@@ -466,9 +446,7 @@ def build_joined_player_ball(
     if df.empty:
         return df
 
-    df["dist_pb"] = np.hypot(
-        df["ball_x"] - df["pl_x"], df["ball_y"] - df["pl_y"]
-    )
+    df["dist_pb"] = np.hypot(df["ball_x"] - df["pl_x"], df["ball_y"] - df["pl_y"])
 
     if df["ball_acc"].isna().all():
         df = df.sort_values("ts").copy()
@@ -560,9 +538,7 @@ def detect_throw_point(
         t_end_window = t_end + pd.Timedelta(milliseconds=50)
 
         # Update mask to include this window
-        window_mask = (df_pb["ts"] >= t_start_window) & (
-            df_pb["ts"] <= t_end_window
-        )
+        window_mask = (df_pb["ts"] >= t_start_window) & (df_pb["ts"] <= t_end_window)
         search_mask |= window_mask
 
     # 4. Filter data to these windows
@@ -620,9 +596,7 @@ def _find_local_maxima(values: np.ndarray, neigh: int = 2) -> List[int]:
     for i in range(neigh, n - neigh):
         if np.isnan(x[i]):
             continue
-        if np.all(x[i] >= x[i - neigh : i]) and np.all(
-            x[i] > x[i + 1 : i + 1 + neigh]
-        ):
+        if np.all(x[i] >= x[i - neigh : i]) and np.all(x[i] > x[i + 1 : i + 1 + neigh]):
             peaks.append(i)
     return peaks
 
@@ -719,9 +693,7 @@ def plot_event_sync(
         if ms is None:
             continue
         axA.axvline(ms, color=col, ls=":", lw=1.8, label=lab)
-        idx = int(
-            np.clip(np.searchsorted(x_ms.to_numpy(), ms), 0, len(acc) - 1)
-        )
+        idx = int(np.clip(np.searchsorted(x_ms.to_numpy(), ms), 0, len(acc) - 1))
         y_here = np.nan_to_num(acc[idx], nan=0.0)
         _annot(axA, ms, y_here, lab, col)
 
@@ -886,9 +858,7 @@ def render_goal_with_multifreeze(
                 continue
             x = int(float(r["x in m"]) * scale)
             y = int(float(r["y in m"]) * scale)
-            cv2.circle(
-                img_draw, (x, y), radius, color, -1, lineType=cv2.LINE_AA
-            )
+            cv2.circle(img_draw, (x, y), radius, color, -1, lineType=cv2.LINE_AA)
 
             league_id = r.get("league id", "N/A")
             name = r.get("full name", "N/A")
@@ -913,9 +883,9 @@ def render_goal_with_multifreeze(
             #     cv2.LINE_AA,
             # )
             try:
-                if shooter_league_id is not None and int(
-                    r.get("league id", -1)
-                ) == int(shooter_league_id):
+                if shooter_league_id is not None and int(r.get("league id", -1)) == int(
+                    shooter_league_id
+                ):
                     cv2.circle(
                         img_draw,
                         (x, y),
@@ -1074,9 +1044,7 @@ def refine_throw_time_for_event(
         seed_ts=seed_ts,
         seed_ms=(seed_ts.value // 10**6) if pd.notna(seed_ts) else None,
         eventTime=row.get("event_time"),
-        eventTime_ms=(
-            row.get("event_time_ms") if "event_time_ms" in row else None
-        ),
+        eventTime_ms=(row.get("event_time_ms") if "event_time_ms" in row else None),
         kin_timestamp=None,
         kin_timestamp_ms=None,
         refined_throw_ts=None,

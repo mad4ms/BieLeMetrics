@@ -1,7 +1,8 @@
 # assets_sportradar_raw.py
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -9,7 +10,6 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.pipelines.normalized.match_positions import (
     normalize_match_positions as normalize_match_positions_fn,
@@ -60,9 +60,7 @@ def match_positions_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview": MetadataValue.md(
-                df_normalized.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_normalized.head().to_markdown(index=False)),
         }
     )
 

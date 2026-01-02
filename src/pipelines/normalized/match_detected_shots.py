@@ -1,10 +1,10 @@
+import difflib
 import logging
 import os
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
 import pandas as pd
-import difflib
+from dotenv import load_dotenv
 
 
 def normalize_match_detected_shots(
@@ -24,21 +24,15 @@ def normalize_match_detected_shots(
     cols_to_drop = [
         "timezone_id",
     ]
-    df_detected_shots = df_detected_shots.drop(
-        columns=cols_to_drop, errors="ignore"
-    )
+    df_detected_shots = df_detected_shots.drop(columns=cols_to_drop, errors="ignore")
 
     # remove rows where league_id contains "ball" or "Ball"
     df_detected_shots = df_detected_shots[
-        ~df_detected_shots["league_id"].str.contains(
-            "ball", case=False, na=False
-        )
+        ~df_detected_shots["league_id"].str.contains("ball", case=False, na=False)
     ]
 
     # set to None where validated is 0
-    df_detected_shots.loc[df_detected_shots["validated"] == 0, "validated"] = (
-        None
-    )
+    df_detected_shots.loc[df_detected_shots["validated"] == 0, "validated"] = None
 
     logging.info("Normalized %d detected shots", len(df_detected_shots))
 

@@ -1,7 +1,8 @@
 # assets_sportradar_raw.py
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -9,12 +10,15 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.pipelines.normalized.match_events import (
     normalize_match_events as normalize_match_events_fn,
-    normalize_match_events_setup as normalize_match_events_setup_fn,
+)
+from src.pipelines.normalized.match_events import (
     normalize_match_events_goals as normalize_match_events_goals_fn,
+)
+from src.pipelines.normalized.match_events import (
+    normalize_match_events_setup as normalize_match_events_setup_fn,
 )
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
@@ -104,9 +108,7 @@ def match_events_normalized_setup(
         {
             "n_rows": len(df_setup),
             "n_columns": df_setup.shape[1],
-            "preview": MetadataValue.md(
-                df_setup.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_setup.head(100).to_markdown(index=False)),
         }
     )
 
@@ -148,9 +150,7 @@ def match_events_normalized_goals(
         {
             "n_rows": len(df_goals),
             "n_columns": df_goals.shape[1],
-            "preview": MetadataValue.md(
-                df_goals.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_goals.head(100).to_markdown(index=False)),
         }
     )
 

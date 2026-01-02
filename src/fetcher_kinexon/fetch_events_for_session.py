@@ -1,5 +1,5 @@
-from typing import Any, Dict, List
 import logging
+from typing import Any, Dict, List
 
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
@@ -52,6 +52,7 @@ def fetch_detected_events_for_sessions_multithreaded(
         pd.DataFrame: Concatenated DataFrame of events for all sessions.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from tqdm import tqdm
 
     all_events: List[pd.DataFrame] = []

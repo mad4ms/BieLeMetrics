@@ -1,11 +1,11 @@
+import difflib
 import json
 import logging
 import os
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
 import pandas as pd
-import difflib
+from dotenv import load_dotenv
 
 PLAYER_COLS = ["bib", "name", "position"]
 
@@ -66,9 +66,7 @@ def normalize_match_events(
         "value",
         "emptyNet",
     ]
-    df_match_events_sportradar = df_fixture_events_sportradar_raw[
-        cols_to_keep
-    ].copy()
+    df_match_events_sportradar = df_fixture_events_sportradar_raw[cols_to_keep].copy()
     df_match_events_sportradar = df_match_events_sportradar.rename(
         columns={
             "entityId": "entity_id",
@@ -85,20 +83,16 @@ def normalize_match_events(
         }
     )
     # sort by event_time
-    df_match_events_sportradar = df_match_events_sportradar.sort_values(
-        "event_time"
-    )
+    df_match_events_sportradar = df_match_events_sportradar.sort_values("event_time")
 
     # Only keep player info on person rows
     mask_person = df_match_events_sportradar["event_type"] == "person"
     df_match_events_sportradar.loc[~mask_person, PLAYER_COLS] = pd.NA
 
     # Group-wise forward fill by person
-    df_match_events_sportradar[PLAYER_COLS] = (
-        df_match_events_sportradar.groupby("person_id", sort=False)[
-            PLAYER_COLS
-        ].ffill()
-    )
+    df_match_events_sportradar[PLAYER_COLS] = df_match_events_sportradar.groupby(
+        "person_id", sort=False
+    )[PLAYER_COLS].ffill()
     return df_match_events_sportradar
 
 

@@ -1,22 +1,17 @@
-from dagster import (
-    asset,
-    AssetExecutionContext,
-    MetadataValue,
-)
 import pandas as pd
-
+from dagster import AssetExecutionContext, MetadataValue, asset
 
 from fetcher_sportradar.fetch_fixture_events import (
     fetch_events_for_fixture,
     process_fixture_events,
 )
 
-from .assets_sportradar_slow import (
+from .assets_sportradar_slow import (  # pylint: disable=relative-beyond-top-level
     fixtures_partition_def,
-)  # pylint: disable=relative-beyond-top-level
-from .utils.metadata import (
+)
+from .utils.metadata import (  # pylint: disable=relative-beyond-top-level
     preview_metadata,
-)  # pylint: disable=relative-beyond-top-level
+)
 
 
 @asset(
@@ -38,12 +33,8 @@ def fixture_events_sportradar(
     fixture_id = context.partition_key
 
     # ---- Retrieve fixture record ----
-    fixtures_sportradar["fixture_id"] = fixtures_sportradar[
-        "fixture_id"
-    ].astype(str)
-    df_fixture = fixtures_sportradar[
-        fixtures_sportradar["fixture_id"] == fixture_id
-    ]
+    fixtures_sportradar["fixture_id"] = fixtures_sportradar["fixture_id"].astype(str)
+    df_fixture = fixtures_sportradar[fixtures_sportradar["fixture_id"] == fixture_id]
 
     if df_fixture.empty:
         context.log.warning(f"Fixture {fixture_id} not found in fixture list.")
@@ -54,14 +45,10 @@ def fixture_events_sportradar(
     # ---- Fetch raw match events ----
     match_events_raw = fetch_events_for_fixture(api_sr, fixture_id)
     if not match_events_raw:
-        context.log.warning(
-            f"No Sportradar events returned for fixture {fixture_id}."
-        )
+        context.log.warning(f"No Sportradar events returned for fixture {fixture_id}.")
         return pd.DataFrame()
 
-    df_raw = pd.DataFrame(match_events_raw).rename(
-        columns={"fixtureId": "fixture_id"}
-    )
+    df_raw = pd.DataFrame(match_events_raw).rename(columns={"fixtureId": "fixture_id"})
     df_raw["fixture_id"] = df_raw["fixture_id"].astype(str)
 
     if pd.notna(session_id):
@@ -92,18 +79,12 @@ def fixture_events_sportradar(
     # unpack scores into separate columns score_home and score_away
     if "scores" in df_match_events.columns:
         valid_ids = df_match_events["entity_id"].notna()
-        unique_entity_ids = df_match_events.loc[
-            valid_ids, "entity_id"
-        ].unique()
+        unique_entity_ids = df_match_events.loc[valid_ids, "entity_id"].unique()
         unique_entity_ids = [uid for uid in unique_entity_ids if uid != "nan"]
         if len(unique_entity_ids) == 2:
             for id in unique_entity_ids:
                 # check if id is df_fixture["entity_id_home"].iloc[0] or away
-                side = (
-                    "home"
-                    if id == df_fixture["entity_id_home"].iloc[0]
-                    else "away"
-                )
+                side = "home" if id == df_fixture["entity_id_home"].iloc[0] else "away"
                 score_col = f"scores_{side}"
                 df_match_events[score_col] = df_match_events["scores"].apply(
                     lambda x: x.get(side) if isinstance(x, dict) else None
@@ -121,15 +102,9 @@ def fixture_events_sportradar(
         "date_game_start": MetadataValue.text(
             str(df_fixture["start_time_local"].iloc[0])
         ),
-        "name_team_home": MetadataValue.text(
-            str(df_fixture["name_team_home"].iloc[0])
-        ),
-        "name_team_away": MetadataValue.text(
-            str(df_fixture["name_team_away"].iloc[0])
-        ),
-        "round_number": MetadataValue.text(
-            str(df_fixture["round_number"].iloc[0])
-        ),
+        "name_team_home": MetadataValue.text(str(df_fixture["name_team_home"].iloc[0])),
+        "name_team_away": MetadataValue.text(str(df_fixture["name_team_away"].iloc[0])),
+        "round_number": MetadataValue.text(str(df_fixture["round_number"].iloc[0])),
         "n_raw_events": len(df_raw),
         "n_processed_events": len(df_match_events),
         "n_unique_players": df_match_events["person_id"].nunique(),
@@ -169,9 +144,7 @@ def fixture_players_sportradar(
     ]
 
     if df_fixture_events_sportradar.empty:
-        context.log.warning(
-            f"Fixture {fixture_id} not found in fixtures asset output."
-        )
+        context.log.warning(f"Fixture {fixture_id} not found in fixtures asset output.")
         return pd.DataFrame()
 
     _, df_fixture_players = process_fixture_events(
@@ -181,13 +154,8 @@ def fixture_players_sportradar(
         api=api_sr,
     )
 
-    if (
-        not df_fixture_players.empty
-        and "person_id" in df_fixture_players.columns
-    ):
-        df_fixture_players = df_fixture_players.drop_duplicates(
-            subset=["person_id"]
-        )
+    if not df_fixture_players.empty and "person_id" in df_fixture_players.columns:
+        df_fixture_players = df_fixture_players.drop_duplicates(subset=["person_id"])
 
     # Set partition column (Will insert players per fixture
     # mind that duplicates across fixtures might exist)

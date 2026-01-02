@@ -2,14 +2,14 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 from src.hbl_etl_dagster.utils.goal_rendering import (
-    render_goal_with_multifreeze,
     OUT_DIR,
+    render_goal_with_multifreeze,
 )
 
 
@@ -78,12 +78,8 @@ def plot_event_sync(
         )
 
     x_ms = _ts_to_ms(df_pb["ts"])
-    acc = df_pb.get("ball_acc", pd.Series([np.nan] * len(df_pb))).to_numpy(
-        dtype=float
-    )
-    dist = df_pb.get("dist_pb", pd.Series([np.nan] * len(df_pb))).to_numpy(
-        dtype=float
-    )
+    acc = df_pb.get("ball_acc", pd.Series([np.nan] * len(df_pb))).to_numpy(dtype=float)
+    dist = df_pb.get("dist_pb", pd.Series([np.nan] * len(df_pb))).to_numpy(dtype=float)
     speed = df_pb.get("ball_speed", pd.Series([np.nan] * len(df_pb))).to_numpy(
         dtype=float
     )
@@ -126,9 +122,7 @@ def plot_event_sync(
         if ms is None:
             continue
         axA.axvline(ms, color=col, ls=":", lw=1.8, label=lab)
-        idx = int(
-            np.clip(np.searchsorted(x_ms.to_numpy(), ms), 0, len(acc) - 1)
-        )
+        idx = int(np.clip(np.searchsorted(x_ms.to_numpy(), ms), 0, len(acc) - 1))
         y_here = np.nan_to_num(acc[idx], nan=0.0)
         _annot(axA, ms, y_here, lab, col)
 
@@ -223,9 +217,7 @@ def _sync_goals_to_detected_shots(
 
             # 2. Fallback to time-only match
             if best is None:
-                cand_time["time_diff"] = (
-                    cand_time["timestamp_ms"] - int(g_ms)
-                ).abs()
+                cand_time["time_diff"] = (cand_time["timestamp_ms"] - int(g_ms)).abs()
                 best = cand_time.loc[cand_time["time_diff"].idxmin()]
                 method = "time_only_fallback"
 
@@ -302,9 +294,7 @@ def _build_player_ball_timeline(
     shooter_lid = str(shooter_league_id)
 
     df_scene = df_scene.copy()
-    df_scene["timestamp_ms"] = pd.to_numeric(
-        df_scene["timestamp_ms"], errors="coerce"
-    )
+    df_scene["timestamp_ms"] = pd.to_numeric(df_scene["timestamp_ms"], errors="coerce")
     df_scene = df_scene.dropna(subset=["timestamp_ms"]).copy()
     df_scene["timestamp_ms"] = df_scene["timestamp_ms"].astype(np.int64)
 
@@ -315,9 +305,7 @@ def _build_player_ball_timeline(
 
     df_scene["league_id"] = df_scene["league_id"].astype("string")
 
-    ball_mask = df_scene["league_id"].str.contains(
-        "ball", case=False, na=False
-    )
+    ball_mask = df_scene["league_id"].str.contains("ball", case=False, na=False)
     ball = df_scene[ball_mask].copy()
     shooter = df_scene[df_scene["league_id"] == shooter_lid].copy()
     if ball.empty or shooter.empty:
@@ -444,9 +432,7 @@ def detect_throw_point(
     # Reference: last possession end row
     last_ts = end_ts.iloc[-1]
     last_row = df_pb[df_pb["ts"] == last_ts].iloc[0]
-    out["last_possession_idx"] = int(
-        df_pb.index.get_indexer_for([last_row.name])[0]
-    )
+    out["last_possession_idx"] = int(df_pb.index.get_indexer_for([last_row.name])[0])
 
     # Search mask: ±50ms around each possession end timestamp
     search_mask = pd.Series(False, index=df_pb.index)
@@ -460,10 +446,7 @@ def detect_throw_point(
         throw_row = last_row
         method = "last_possession_fallback_empty_window"
     else:
-        if (
-            "ball_acc" not in candidates.columns
-            or candidates["ball_acc"].isna().all()
-        ):
+        if "ball_acc" not in candidates.columns or candidates["ball_acc"].isna().all():
             throw_row = last_row
             method = "last_possession_fallback_no_acc"
         else:
@@ -583,11 +566,7 @@ def _refine_throw_times(
 
             kin_ms = None
             try:
-                kin_ms = (
-                    int(det_ts.value // 1_000_000)
-                    if pd.notna(det_ts)
-                    else None
-                )
+                kin_ms = int(det_ts.value // 1_000_000) if pd.notna(det_ts) else None
             except Exception:
                 kin_ms = None
 
@@ -692,9 +671,7 @@ def insert_player_goalkeeper_info(
     # Goalkeeper enrichment (goalkeeper_id -> league_id/mapped_id/name/team)
     # Use distinct names to avoid collisions; do not rename "mapped_id"/"league_id" from the shooter join.
     out = out.merge(
-        df_players[
-            ["person_id", "league_id", "mapped_id", "name", "team_name"]
-        ].rename(
+        df_players[["person_id", "league_id", "mapped_id", "name", "team_name"]].rename(
             columns={
                 "person_id": "goalkeeper_person_id",
                 "league_id": "goalkeeper_league_id",
@@ -781,9 +758,7 @@ def insert_goal_position(
 
     for team in teams:
         gk_ids = (
-            df_goals.loc[
-                df_goals["team_name_defense"] == team, "goalkeeper_league_id"
-            ]
+            df_goals.loc[df_goals["team_name_defense"] == team, "goalkeeper_league_id"]
             .dropna()
             .astype("string")
             .unique()
@@ -792,15 +767,12 @@ def insert_goal_position(
             continue
 
         df_p1 = df_goals[
-            (df_goals["period_id"] == 1)
-            & (df_goals["team_name_defense"] == team)
+            (df_goals["period_id"] == 1) & (df_goals["team_name_defense"] == team)
         ]
         if df_p1.empty:
             continue
 
-        split_ts_ms = int(
-            df_p1.sort_values("event_time_ms").iloc[-1]["event_time_ms"]
-        )
+        split_ts_ms = int(df_p1.sort_values("event_time_ms").iloc[-1]["event_time_ms"])
 
         df_pos_p1 = df_positions[df_positions["timestamp_ms"] <= split_ts_ms]
         df_pos_p2 = df_positions[df_positions["timestamp_ms"] > split_ts_ms]
@@ -818,9 +790,7 @@ def insert_goal_position(
             goal_pos_map[team][2] = 0 if df_gk_p2["x_m"].median() < 20 else 40
 
     df_goals["goal_position"] = df_goals.apply(
-        lambda r: goal_pos_map.get(r["team_name_defense"], {}).get(
-            r["period_id"]
-        ),
+        lambda r: goal_pos_map.get(r["team_name_defense"], {}).get(r["period_id"]),
         axis=1,
     )
     return df_goals
@@ -923,10 +893,7 @@ def sync_shot_events(
             df_goals["detected_events_shot_time"].astype("int64") // 1_000_000
         ) - df_goals["throw_timestamp_ms"]
 
-    if (
-        "event_time_ms" in df_goals.columns
-        and "throw_timestamp_ms" in df_goals.columns
-    ):
+    if "event_time_ms" in df_goals.columns and "throw_timestamp_ms" in df_goals.columns:
         df_goals["time_diff_event_throw_ms"] = (
             df_goals["event_time_ms"] - df_goals["throw_timestamp_ms"]
         )
@@ -1075,9 +1042,7 @@ if __name__ == "__main__":
 
         # log info about the match
         if df_match.empty:
-            logging.warning(
-                "No match data for fixture_id=%s, skipping.", fixture_id
-            )
+            logging.warning("No match data for fixture_id=%s, skipping.", fixture_id)
             continue
         else:
             logging.info(
@@ -1161,9 +1126,7 @@ if __name__ == "__main__":
         )
         # time difference of event_time_ms - throw_timestamp_ms
         if "time_diff_event_throw_ms" in df_synced.columns:
-            diffs = (
-                df_synced["time_diff_event_throw_ms"].dropna().astype(float)
-            )
+            diffs = df_synced["time_diff_event_throw_ms"].dropna().astype(float)
             if not diffs.empty:
                 logging.info(
                     "Time difference event_time_ms - throw_timestamp_ms: mean=%.2f ms, median=%.2f ms, std=%.2f ms",

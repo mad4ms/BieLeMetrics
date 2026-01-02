@@ -1,6 +1,7 @@
 """Module to fetch season ID from Sportradar Handball API."""
 
 import logging
+
 from sportradar_datacore_api.handball import HandballAPI
 
 YEAR_SEASON = "2024"  # saison 24/25

@@ -1,8 +1,10 @@
 # assets_sportradar_raw.py
 import os
+
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -10,11 +12,12 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.pipelines.raw.kinexon import (
-    get_teams_for_season as kinexon_get_teams_for_season,
     get_sessions_for_team as kinexon_get_sessions_for_team,
+)
+from src.pipelines.raw.kinexon import (
+    get_teams_for_season as kinexon_get_teams_for_season,
 )
 
 
@@ -46,9 +49,7 @@ def teams_kinexon_raw(
         {
             "n_rows": len(df_teams),
             "n_columns": df_teams.shape[1],
-            "preview": MetadataValue.md(
-                df_teams.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_teams.head().to_markdown(index=False)),
         }
     )
 
@@ -79,9 +80,7 @@ def sessions_kinexon_raw(
             start_date=date_start,
             end_date=date_end,
         )
-        df_sessions = pd.concat(
-            [df_sessions, df_team_sessions], ignore_index=True
-        )
+        df_sessions = pd.concat([df_sessions, df_team_sessions], ignore_index=True)
         # deduplicate
         df_sessions = df_sessions.drop_duplicates(subset=["id"])
 
@@ -90,9 +89,7 @@ def sessions_kinexon_raw(
         {
             "n_rows": len(df_sessions),
             "n_columns": df_sessions.shape[1],
-            "preview": MetadataValue.md(
-                df_sessions.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_sessions.head().to_markdown(index=False)),
         }
     )
 

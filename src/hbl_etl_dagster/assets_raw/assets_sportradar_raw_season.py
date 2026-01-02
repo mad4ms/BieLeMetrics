@@ -2,9 +2,10 @@
 
 # from __future__ import annotations
 
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -12,15 +13,14 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
 from src.hbl_etl_dagster.utils.metadata import preview_metadata
+from src.pipelines.raw.sportradar import get_competition_id as sr_get_competition_id
 from src.pipelines.raw.sportradar import (
-    get_competition_id as sr_get_competition_id,
-    get_season_id as sr_get_season_id,
-    get_teams_for_season as sr_get_teams_for_season,
     get_fixtures_for_season as sr_get_fixtures_for_season,
 )
+from src.pipelines.raw.sportradar import get_season_id as sr_get_season_id
+from src.pipelines.raw.sportradar import get_teams_for_season as sr_get_teams_for_season
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -79,9 +79,7 @@ def season_id(context: AssetExecutionContext, competition_id: str) -> str:
             description=f"Could not resolve season_id for competition_id={competition_id!r}, season_year={season_year!r}"
         )
 
-    context.log.info(
-        "Resolved season_id=%s (season_year=%s)", s_id, season_year
-    )
+    context.log.info("Resolved season_id=%s (season_year=%s)", s_id, season_year)
     return str(s_id)
 
 
@@ -97,9 +95,7 @@ def teams_sportradar_raw(
     api = context.resources.sportradar_api
     df = sr_get_teams_for_season(api=api, season_id=season_id)
 
-    context.log.info(
-        "Fetched %d teams (raw) for season_id=%s", len(df), season_id
-    )
+    context.log.info("Fetched %d teams (raw) for season_id=%s", len(df), season_id)
     context.add_output_metadata(preview_metadata(df))
     return df
 
@@ -120,9 +116,7 @@ def fixtures_sportradar_raw(
     if not isinstance(df, pd.DataFrame):
         df = pd.DataFrame(df)
 
-    context.log.info(
-        "Fetched %d fixtures (raw) for season_id=%s", len(df), season_id
-    )
+    context.log.info("Fetched %d fixtures (raw) for season_id=%s", len(df), season_id)
 
     # Register dynamic partitions if fixtureId (in raw data) exists; no other processing.
     # we need to rename it to standardize the column name
@@ -139,9 +133,7 @@ def fixtures_sportradar_raw(
         context.instance.add_dynamic_partitions(
             fixtures_partition_def.name, fixture_ids
         )
-        context.add_output_metadata(
-            {"n_partitions_registered": len(fixture_ids)}
-        )
+        context.add_output_metadata({"n_partitions_registered": len(fixture_ids)})
     else:
         context.log.warning(
             "Column 'fixtureId' missing; skipping dynamic partition registration."
@@ -176,7 +168,6 @@ def check_fixtures_have_unique_ids_when_present(
 
     ok = bool(fixtures_sportradar_raw["fixture_id"].is_unique)
     n_dup = int(
-        len(fixtures_sportradar_raw)
-        - fixtures_sportradar_raw["fixture_id"].nunique()
+        len(fixtures_sportradar_raw) - fixtures_sportradar_raw["fixture_id"].nunique()
     )
     return AssetCheckResult(passed=ok, metadata={"n_duplicates": n_dup})

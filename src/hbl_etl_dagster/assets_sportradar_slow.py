@@ -1,28 +1,26 @@
+import pandas as pd
 from dagster import (
-    asset,
+    AssetCheckResult,
     AssetExecutionContext,
-    MetadataValue,
     DynamicPartitionsDefinition,
     Field,
+    MetadataValue,
+    asset,
+    asset_check,
 )
-from dagster import asset_check, AssetCheckResult
-import pandas as pd
 
-from src.fetcher_sportradar.fetch_competition_id import fetch_competition_id
 from fetcher_sportradar.fetch_season_id import fetch_season_id
-from src.fetcher_sportradar.fetch_teams import fetch_teams_by_season_id
-from src.fetcher_sportradar.fetch_list_fixtures import (
-    fetch_list_fixtures,
-    refine_fixtures_data,
-    expand_competitors_in_fixtures,
-)
 from src.fetcher_kinexon.fetch_session_id_for_fixtures import (
     fetch_session_ids_for_fixtures,
 )
-
-from src.hbl_etl_dagster.utils.metadata import (
-    preview_metadata,
+from src.fetcher_sportradar.fetch_competition_id import fetch_competition_id
+from src.fetcher_sportradar.fetch_list_fixtures import (
+    expand_competitors_in_fixtures,
+    fetch_list_fixtures,
+    refine_fixtures_data,
 )
+from src.fetcher_sportradar.fetch_teams import fetch_teams_by_season_id
+from src.hbl_etl_dagster.utils.metadata import preview_metadata
 
 # Define dynamic partitions for fixtures
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
@@ -76,9 +74,7 @@ def season_id(context: AssetExecutionContext, competition_id: str) -> str:
     group_name="sportradar_data",
     compute_kind="duckdb",
 )
-def teams_sportradar(
-    context: AssetExecutionContext, season_id: str
-) -> pd.DataFrame:
+def teams_sportradar(context: AssetExecutionContext, season_id: str) -> pd.DataFrame:
     """
     All teams for a given season. Depends on the in-memory season_id asset.
     Persisted to DuckDB via IOManager.
@@ -146,9 +142,7 @@ def fixtures_sportradar(
         dict_session_ids
     )
     # ensure fixture_id is str
-    expanded_fixtures["fixture_id"] = expanded_fixtures["fixture_id"].astype(
-        str
-    )
+    expanded_fixtures["fixture_id"] = expanded_fixtures["fixture_id"].astype(str)
 
     s = pd.to_datetime(expanded_fixtures["start_time_utc"], errors="coerce")
     try:
@@ -177,9 +171,7 @@ def fixtures_sportradar(
     context.log.info(
         f"Fetched session IDs for {len(dict_session_ids)} fixtures from Kinexon."
     )
-    context.log.info(
-        f"Fetched and expanded {len(expanded_fixtures)} fixtures."
-    )
+    context.log.info(f"Fetched and expanded {len(expanded_fixtures)} fixtures.")
     # Add output metadata
     metadata = {
         "n_games": len(expanded_fixtures),
@@ -188,9 +180,7 @@ def fixtures_sportradar(
             expanded_fixtures["session_id"].notna()
         ].shape[0],
         "team_names_unique": expanded_fixtures["name_team_home"].nunique(),
-        "preview": MetadataValue.md(
-            expanded_fixtures.head().to_markdown(index=False)
-        ),
+        "preview": MetadataValue.md(expanded_fixtures.head().to_markdown(index=False)),
     }
     context.add_output_metadata(metadata)
 

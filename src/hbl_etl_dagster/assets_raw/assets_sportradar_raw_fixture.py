@@ -1,7 +1,8 @@
 # assets_sportradar_raw.py
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
     AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
@@ -9,10 +10,9 @@ from dagster import (
     asset,
     asset_check,
 )
-import pandas as pd
 
+from src.pipelines.raw.sportradar import get_fixture_events as sr_get_fixture_events
 from src.pipelines.raw.sportradar import (
-    get_fixture_events as sr_get_fixture_events,
     get_players_for_fixture as sr_get_players_for_fixture,
 )
 
@@ -47,29 +47,21 @@ def fixture_events_sportradar_raw(
     if "fixtureId" in df.columns:
         df = df.rename(columns={"fixtureId": "fixture_id"})
 
-    context.log.info(
-        "Fetched %d events (raw) for fixture_id=%s", len(df), fixture_id
-    )
+    context.log.info("Fetched %d events (raw) for fixture_id=%s", len(df), fixture_id)
     context.add_output_metadata(
         {
             "fixture_id": str(fixture_id),
             "n_rows": len(df),
             "n_columns": df.shape[1],
-            "preview_setup": MetadataValue.md(
-                df.head().to_markdown(index=False)
-            ),
+            "preview_setup": MetadataValue.md(df.head().to_markdown(index=False)),
             "preview_goals": MetadataValue.md(
-                df[df["eventType"] == "goal"]
-                .head(100)
-                .to_markdown(index=False)
+                df[df["eventType"] == "goal"].head(100).to_markdown(index=False)
             ),
         }
     )
     if df.empty:
         context.log.warning("No events fetched for fixture_id=%s", fixture_id)
-        raise Failure(
-            description=f"No events fetched for fixture_id={fixture_id}"
-        )
+        raise Failure(description=f"No events fetched for fixture_id={fixture_id}")
 
     nested_cols = []
     for c in df.columns:
@@ -108,9 +100,7 @@ def players_sportradar_raw(
         )
         return pd.DataFrame()
 
-    df_players = sr_get_players_for_fixture(
-        api=api, df_match_events=df_match_events
-    )
+    df_players = sr_get_players_for_fixture(api=api, df_match_events=df_match_events)
     if not isinstance(df_players, pd.DataFrame):
         df_players = pd.DataFrame(df_players)
 
@@ -127,16 +117,14 @@ def players_sportradar_raw(
             "fixture_id": str(fixture_id),
             "n_rows": len(df_players),
             "n_columns": df_players.shape[1],
-            "preview": MetadataValue.md(
-                df_players.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_players.head().to_markdown(index=False)),
         }
     )
     return df_players
 
 
-from dagster import AssetCheckResult, asset_check
 import pandas as pd
+from dagster import AssetCheckResult, asset_check
 
 
 @asset_check(asset=fixture_events_sportradar_raw)
@@ -177,15 +165,10 @@ def check_events_have_unique_event_ids_when_present(
     if fixture_events_sportradar_raw.empty:
         return AssetCheckResult(passed=True, metadata={"skipped": "no rows"})
 
-    ok = bool(
-        fixture_events_sportradar_raw["eventId"].dropna().astype(str).is_unique
-    )
+    ok = bool(fixture_events_sportradar_raw["eventId"].dropna().astype(str).is_unique)
     n_dup = int(
         fixture_events_sportradar_raw["eventId"].dropna().astype(str).shape[0]
-        - fixture_events_sportradar_raw["eventId"]
-        .dropna()
-        .astype(str)
-        .nunique()
+        - fixture_events_sportradar_raw["eventId"].dropna().astype(str).nunique()
     )
     return AssetCheckResult(
         passed=ok,
@@ -207,12 +190,7 @@ def check_players_have_unique_person_ids_when_present(
     ):
         df = players_sportradar_raw.dropna(subset=["personId", "fixture_id"])
         n_total = len(df)
-        n_unique = (
-            df[["personId", "fixture_id"]]
-            .astype(str)
-            .drop_duplicates()
-            .shape[0]
-        )
+        n_unique = df[["personId", "fixture_id"]].astype(str).drop_duplicates().shape[0]
         n_unique_players = df["personId"].dropna().astype(str).nunique()
         ok = n_total == n_unique
         n_dup = n_total - n_unique
@@ -239,13 +217,7 @@ def players_fixture_id_matches_events_when_present(
             passed=True, metadata={"skipped": "fixtureId column missing"}
         )
 
-    vals = (
-        players_sportradar_raw["fixtureId"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
+    vals = players_sportradar_raw["fixtureId"].dropna().astype(str).unique().tolist()
     ok = len(vals) <= 1
     return AssetCheckResult(
         passed=bool(ok),

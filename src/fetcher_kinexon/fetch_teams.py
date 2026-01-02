@@ -1,10 +1,10 @@
+import datetime
+import difflib
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional, Tuple
+
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
-from typing import Tuple
-import difflib
-import datetime
 
 
 def fetch_teams_for_season(

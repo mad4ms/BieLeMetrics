@@ -1,6 +1,7 @@
+import logging
+
 import pandas as pd
 from thefuzz import process
-import logging
 
 
 def fuzzy_match_players_to_positions(
@@ -39,9 +40,9 @@ def fuzzy_match_players_to_positions(
         if score >= score_threshold:
             # Get the league_id for the matched name
             # Assuming names are unique enough within a session/fixture context
-            kinexon_row = df_positions[
-                df_positions["full_name_kinexon"] == match
-            ].iloc[0]
+            kinexon_row = df_positions[df_positions["full_name_kinexon"] == match].iloc[
+                0
+            ]
 
             player_row["kin_league_id"] = kinexon_row["league_id"]
             player_row["kin_mapped_id"] = kinexon_row["mapped_id"]
@@ -53,9 +54,7 @@ def fuzzy_match_players_to_positions(
                 )
 
     if logger:
-        logger.info(
-            f"Matched {len(matched_rows)} out of {len(df_players)} players."
-        )
+        logger.info(f"Matched {len(matched_rows)} out of {len(df_players)} players.")
 
     if not matched_rows:
         return pd.DataFrame()

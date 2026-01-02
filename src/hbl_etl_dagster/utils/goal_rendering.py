@@ -7,7 +7,6 @@ import cv2
 import pandas as pd
 from scipy.__config__ import show
 
-
 FIELD_IMAGE: Path = Path("assets/handballfeld.png")
 OUT_DIR: Path = Path("data/renders/")
 FPS: int = 20
@@ -116,9 +115,7 @@ def render_goal_with_multifreeze(
     def draw_overlay(img_draw, ts_val: pd.Timestamp):
         def ms_delta(now: pd.Timestamp, then: str) -> int:
             """Return non-negative delta in milliseconds."""
-            delta_ms = (
-                now - pd.to_datetime(then, utc=True)
-            ).total_seconds() * 1000
+            delta_ms = (now - pd.to_datetime(then, utc=True)).total_seconds() * 1000
             return int(delta_ms)
 
         is_home = row_goal.get("entity_id_home", None) == row_goal.get(
@@ -149,8 +146,7 @@ def render_goal_with_multifreeze(
             "Markers: " + ", ".join(m["name"] for m in valid_markers),
             "Freeze in: "
             + ", ".join(
-                f"{m['name']} ({ms_delta(ts_val, m['ts'])} ms)"
-                for m in valid_markers
+                f"{m['name']} ({ms_delta(ts_val, m['ts'])} ms)" for m in valid_markers
             ),
             (
                 f"Event end: {row_goal.get('event_time_ms', '')} ms | "
@@ -193,9 +189,7 @@ def render_goal_with_multifreeze(
                 continue
             x = int(float(r["x_m"]) * scale)
             y = int(float(r["y_m"]) * scale)
-            cv2.circle(
-                img_draw, (x, y), radius, color, -1, lineType=cv2.LINE_AA
-            )
+            cv2.circle(img_draw, (x, y), radius, color, -1, lineType=cv2.LINE_AA)
 
             name = r.get("full_name", "N/A")
             cv2.putText(
@@ -210,9 +204,9 @@ def render_goal_with_multifreeze(
             )
 
             try:
-                if shooter_league_id is not None and int(
-                    r.get("league_id", -1)
-                ) == int(shooter_league_id):
+                if shooter_league_id is not None and int(r.get("league_id", -1)) == int(
+                    shooter_league_id
+                ):
                     cv2.circle(
                         img_draw,
                         (x, y),

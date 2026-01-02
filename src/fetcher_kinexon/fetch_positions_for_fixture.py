@@ -1,9 +1,10 @@
-from typing import Any, Dict, List
-import pandas as pd
 import gzip
-import zipfile
 import io
 import logging
+import zipfile
+from typing import Any, Dict, List
+
+import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
 
 
@@ -28,9 +29,7 @@ def read_positions_payload(payload: bytes) -> pd.DataFrame:
         csv_bytes = raw
     elif _is_zip(raw):
         with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            name = next(
-                (n for n in zf.namelist() if n.lower().endswith(".csv")), None
-            )
+            name = next((n for n in zf.namelist() if n.lower().endswith(".csv")), None)
             if not name:
                 raise ValueError("ZIP archive does not contain a CSV file.")
             csv_bytes = zf.read(name)
@@ -40,9 +39,7 @@ def read_positions_payload(payload: bytes) -> pd.DataFrame:
     return pd.read_csv(io.StringIO(csv_bytes.decode("utf-8-sig")), sep=";")
 
 
-def fetch_positions_for_fixture(
-    api: HandballAPI, session_id: str
-) -> pd.DataFrame:
+def fetch_positions_for_fixture(api: HandballAPI, session_id: str) -> pd.DataFrame:
     """
     Fetch player positions for a specific fixture.
 
@@ -93,6 +90,7 @@ def fetch_positions_for_fixtures_multithreaded(
         pd.DataFrame: A DataFrame containing player positions for all fixtures.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from tqdm import tqdm
 
     all_positions = []

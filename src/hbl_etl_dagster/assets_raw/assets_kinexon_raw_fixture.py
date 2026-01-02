@@ -1,23 +1,26 @@
 # assets_sportradar_raw.py
-from multiprocessing import context
 import os
+from multiprocessing import context
+
+import pandas as pd
 from dagster import (
-    AssetExecutionContext,
-    AssetCheckResult,
     AssetCheckExecutionContext,
+    AssetCheckResult,
+    AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
     Field,
     MetadataValue,
-    asset,
-    asset_check,
     TableColumn,
     TableSchema,
+    asset,
+    asset_check,
 )
-import pandas as pd
 
 from src.pipelines.raw.kinexon import (
     get_detected_events_for_fixture as kinexon_get_detected_events_for_fixture,
+)
+from src.pipelines.raw.kinexon import (
     get_positions_for_session as kinexon_get_positions_for_session,
 )
 
@@ -49,9 +52,7 @@ def positions_kinexon_raw(
     ].copy()
 
     if df_match.empty:
-        context.log.warning(
-            "No session IDs found for fixture_id=%s", fixture_id
-        )
+        context.log.warning("No session IDs found for fixture_id=%s", fixture_id)
         return pd.DataFrame()
 
     # There can only be one session_id in df_match
@@ -125,9 +126,7 @@ def positions_kinexon_raw(
             "dagster/row_count": len(df_positions),
             "fixture_id": str(fixture_id),
             "n_columns": df_positions.shape[1],
-            "preview": MetadataValue.md(
-                df_positions.head().to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(df_positions.head().to_markdown(index=False)),
         }
     )
 
@@ -157,9 +156,7 @@ def detected_events_kinexon_raw(
     ].copy()
 
     if df_match.empty:
-        context.log.warning(
-            "No session IDs found for fixture_id=%s", fixture_id
-        )
+        context.log.warning("No session IDs found for fixture_id=%s", fixture_id)
         return pd.DataFrame()
 
     # There can only be one session_id in df_match
@@ -168,9 +165,7 @@ def detected_events_kinexon_raw(
 
     session_id = df_match.iloc[0]["session_id"]
 
-    df_events = kinexon_get_detected_events_for_fixture(
-        api=api, session_id=session_id
-    )
+    df_events = kinexon_get_detected_events_for_fixture(api=api, session_id=session_id)
     # insert fixture_id column for partitioning
     df_events["fixture_id"] = str(fixture_id)
 
@@ -180,33 +175,32 @@ def detected_events_kinexon_raw(
         fixture_id,
     )
     context.add_output_metadata(
-    {
-        "dagster/column_schema": TableSchema(
-            columns=[
-                TableColumn(name=col, type=str(dtype))
-                for col, dtype in df_events.dtypes.items()
-            ]
-        ),
-        "dagster/row_count": len(df_events),
-        "fixture_id": str(fixture_id),
-        "n_columns": df_events.shape[1],
-        "preview": MetadataValue.md(
-            df_events.head().to_markdown(index=False)
-        ),
-    }
-)
+        {
+            "dagster/column_schema": TableSchema(
+                columns=[
+                    TableColumn(name=col, type=str(dtype))
+                    for col, dtype in df_events.dtypes.items()
+                ]
+            ),
+            "dagster/row_count": len(df_events),
+            "fixture_id": str(fixture_id),
+            "n_columns": df_events.shape[1],
+            "preview": MetadataValue.md(df_events.head().to_markdown(index=False)),
+        }
+    )
     return df_events
 
 
 @asset_check(asset=positions_kinexon_raw)
-def check_positions_kinexon_raw_notna(context: AssetCheckExecutionContext) -> AssetCheckResult:
+def check_positions_kinexon_raw_notna(
+    context: AssetCheckExecutionContext,
+) -> AssetCheckResult:
     partition_key = context.run.tags["dagster/partition"]
     df_match_position = context.resources.io_manager.load_partitioned_input(
         table_name="positions_kinexon_raw",
         partition_col="fixture_id",
         partition_key=partition_key,
     )
-
 
     # check if length is not zero, fail check if zero
     if df_match_position.empty:
@@ -231,8 +225,12 @@ def check_positions_kinexon_raw_notna(context: AssetCheckExecutionContext) -> As
 
     return AssetCheckResult(
         passed=True,
-        metadata={"checked_columns": ["x in m", "y in m"], "n_rows": len(df_match_position)},
+        metadata={
+            "checked_columns": ["x in m", "y in m"],
+            "n_rows": len(df_match_position),
+        },
     )
+
 
 @asset_check(asset=detected_events_kinexon_raw)
 def check_detected_events_have_unique_event_ids_when_present(
@@ -247,9 +245,7 @@ def check_detected_events_have_unique_event_ids_when_present(
     col = "Id"
 
     if col in detected_events_kinexon_raw.columns:
-        ok = bool(
-            detected_events_kinexon_raw["Id"].dropna().astype(str).is_unique
-        )
+        ok = bool(detected_events_kinexon_raw["Id"].dropna().astype(str).is_unique)
         n_dup = int(
             detected_events_kinexon_raw["Id"].dropna().astype(str).shape[0]
             - detected_events_kinexon_raw["Id"].dropna().astype(str).nunique()

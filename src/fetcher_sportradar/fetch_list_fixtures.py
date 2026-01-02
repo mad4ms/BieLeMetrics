@@ -1,4 +1,5 @@
 import logging
+
 import pandas as pd
 from sportradar_datacore_api.handball import HandballAPI
 
@@ -66,9 +67,7 @@ def refine_fixtures_data(fixtures_data: list) -> pd.DataFrame:
         # Select and rename columns
         try:
             available = [
-                col
-                for col in columns_to_keep.keys()
-                if col in df_fixture.columns
+                col for col in columns_to_keep.keys() if col in df_fixture.columns
             ]
         except Exception:
             available = []
@@ -131,9 +130,7 @@ def expand_competitors_in_fixtures(
         )
         # convert competitors_expanded to json and add to fixture
         fixture_dict = fixture.drop("competitors").to_dict()
-        fixture_dict["competitors"] = competitors_expanded.to_dict(
-            orient="records"
-        )
+        fixture_dict["competitors"] = competitors_expanded.to_dict(orient="records")
         # insert entity_id_home and entity_id_away
         fixture_dict["entity_id_home"] = competitors_expanded[
             competitors_expanded["is_home"] == True
@@ -339,12 +336,8 @@ def calculate_standings(df_fixtures: pd.DataFrame) -> pd.DataFrame:
             standings[away_id]["pts_against"] += 1
 
         # recompute gd explicitly
-        standings[home_id]["gd"] = (
-            standings[home_id]["gf"] - standings[home_id]["ga"]
-        )
-        standings[away_id]["gd"] = (
-            standings[away_id]["gf"] - standings[away_id]["ga"]
-        )
+        standings[home_id]["gd"] = standings[home_id]["gf"] - standings[home_id]["ga"]
+        standings[away_id]["gd"] = standings[away_id]["gf"] - standings[away_id]["ga"]
 
         # standings after THIS game
         tbl = standings_table_df()

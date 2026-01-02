@@ -2,21 +2,20 @@ import logging
 import os
 from typing import Optional
 
-from dotenv import load_dotenv
 import pandas as pd
-
+from dotenv import load_dotenv
 from kinexon_handball_api.handball import HandballAPI
-from src.fetcher_kinexon.fetch_session_id_for_fixtures import (
-    fetch_session_ids_for_fixtures,
-)
+
 from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
-
-from src.fetcher_kinexon.fetch_teams import fetch_teams_for_season
 from src.fetcher_kinexon.fetch_positions_for_fixture import (
     fetch_positions_for_fixture,
 )
+from src.fetcher_kinexon.fetch_session_id_for_fixtures import (
+    fetch_session_ids_for_fixtures,
+)
+from src.fetcher_kinexon.fetch_teams import fetch_teams_for_season
 
 
 def get_teams_for_season(
@@ -111,3 +110,31 @@ def get_positions_for_session(
         session_id,
     )
     return df_positions
+
+
+if __name__ == "__main__":
+    import duckdb
+
+    con_duckdb = "./data/hbl_raw.duckdb"
+
+    logging.basicConfig(level=logging.INFO)
+    load_dotenv()
+
+    db = duckdb.connect(con_duckdb)
+
+    df_matches = db.execute(
+        f"""
+        SELECT *
+        FROM matches_normalized
+        """
+    ).df()
+
+    # unique session_id in positions_kinexon_raw
+    df_unique_sessions = db.execute(
+        f"""
+        SELECT DISTINCT session_id
+        FROM positions_kinexon_raw
+        WHERE session_id IS NOT NULL
+        """
+    ).df()
+    existing_session_ids = set(df_unique_sessions["session_id"].tolist())

@@ -1,25 +1,18 @@
-from dagster import asset, AssetExecutionContext
-import pandas as pd
+from typing import Any, Dict, List
+
 import numpy as np
-
-from typing import Dict, Any, List
-
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder
+import pandas as pd
+from dagster import AssetExecutionContext, asset
 from sklearn.compose import ColumnTransformer
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import (
-    roc_auc_score,
-    log_loss,
-    accuracy_score,
-    brier_score_loss,
-)
+from sklearn.preprocessing import OneHotEncoder
+from xgboost import XGBClassifier
 
-from .assets_sportradar_slow import (
+from .assets_sportradar_slow import (  # only if you really want partitions here
     fixtures_partition_def,
-)  # only if you really want partitions here
-
+)
 
 NUMERIC_FEATURES: List[str] = [
     "distance_thrower_goalkeeper",
@@ -76,23 +69,17 @@ def xg_model_training(
     y = df[TARGET_COL].astype(int)
 
     missing_features = [
-        col
-        for col in NUMERIC_FEATURES + CATEGORICAL_FEATURES
-        if col not in df.columns
+        col for col in NUMERIC_FEATURES + CATEGORICAL_FEATURES if col not in df.columns
     ]
     if missing_features:
-        context.log.error(
-            f"Missing required feature columns: {missing_features}"
-        )
+        context.log.error(f"Missing required feature columns: {missing_features}")
         return None
 
     X = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES].copy()
 
     # Simple imputation for numerics (if needed)
     X[NUMERIC_FEATURES] = X[NUMERIC_FEATURES].astype(float)
-    X[NUMERIC_FEATURES] = X[NUMERIC_FEATURES].fillna(
-        X[NUMERIC_FEATURES].median()
-    )
+    X[NUMERIC_FEATURES] = X[NUMERIC_FEATURES].fillna(X[NUMERIC_FEATURES].median())
 
     # Categorical as string, fill NA
     for col in CATEGORICAL_FEATURES:

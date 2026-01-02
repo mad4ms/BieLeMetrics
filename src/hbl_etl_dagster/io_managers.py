@@ -1,12 +1,13 @@
 # hbl_dagster/io_managers.py
 
+import json
 from contextlib import contextmanager
-from dagster import IOManager, io_manager
+from pathlib import Path
+
 import duckdb
 import pandas as pd
-from pathlib import Path
+from dagster import IOManager, io_manager
 from filelock import FileLock
-import json
 
 
 class DuckDBIOManager(IOManager):
@@ -82,10 +83,9 @@ class DuckDBIOManager(IOManager):
                 "partition_column", "fixture_id"
             )
 
-            obj = self._jsonify_nested_columns(obj)
-
             with self._conn() as con:
                 if isinstance(obj, pd.DataFrame):
+                    obj = self._jsonify_nested_columns(obj)
                     con.register("tmp_df", obj)
 
                     if not self._table_exists(con, table_name):
@@ -181,3 +181,34 @@ def duckdb_io_manager(init_context):
     """
     db_path = init_context.resource_config["db_path"]
     return DuckDBIOManager(db_path=db_path)
+
+
+# hbl_dagster/io_managers.py
+from dagster import IOManager, io_manager
+
+
+class InMemoryIOManager(IOManager):
+    """
+    Keeps asset values only in memory for the lifetime of the run.
+    Suitable for models, sklearn Pipelines, torch modules, etc.
+    """
+
+    def __init__(self):
+        self._store = {}
+
+    def handle_output(self, context, obj):
+        self._store[context.asset_key] = obj
+
+    def load_input(self, context):
+        key = context.upstream_output.asset_key
+        if key not in self._store:
+            raise RuntimeError(
+                f"In-memory asset {key.to_user_string()} not found. "
+                "This asset must be produced in the same run."
+            )
+        return self._store[key]
+
+
+@io_manager
+def in_memory_io_manager(_):
+    return InMemoryIOManager()

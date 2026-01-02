@@ -1,45 +1,38 @@
 from dagster import (
+    AssetSelection,
     Definitions,
     FilesystemIOManager,
-    AssetSelection,
     define_asset_job,
     multiprocess_executor,
 )
 
+from .assets_feature import features_at_throw_time
+from .assets_kinexon import kinexon_events, kinexon_positions
+from .assets_machlearn import xg_model_training
+from .assets_sportradar import fixture_events_sportradar, fixture_players_sportradar
 from .assets_sportradar_slow import (
     competition_id,
-    season_id,
-    fixtures_partition_def,
-    teams_sportradar,
-    fixtures_sportradar,
-)
-
-from .assets_sportradar_slow import (
-    fixtures_have_unique_ids,
     fixture_session_coverage,
     fixtures_are_utc,
+    fixtures_have_unique_ids,
+    fixtures_partition_def,
+    fixtures_sportradar,
+    season_id,
+    teams_sportradar,
 )
-
-from .assets_sportradar import (
-    fixture_events_sportradar,
-    fixture_players_sportradar,
-)
-from .assets_kinexon import kinexon_positions, kinexon_events
 from .assets_sync import (
     players_merged,
-    sportradar_goals_synced,
-    sportradar_goals_refined,
     positions_for_throw_time,
     rendered_throw_videos_first5,
+    sportradar_goals_refined,
+    sportradar_goals_synced,
 )
-from .assets_feature import features_at_throw_time
-from .assets_machlearn import xg_model_training
+from .io_managers import duckdb_io_manager
+from .resources import kinexon_api, sportradar_api
+from .sensors import fixture_sensor
 
 # from .assets_maintenance import backfill_player_league_ids
 
-from .io_managers import duckdb_io_manager
-from .resources import sportradar_api, kinexon_api
-from .sensors import fixture_sensor
 
 
 SEASON_DEFAULT_CONFIG = {
@@ -111,9 +104,7 @@ defs = Definitions(
     jobs=[season_refresh_job, fixture_backfill_job],
     sensors=[fixture_sensor],
     resources={
-        "io_manager": duckdb_io_manager.configured(
-            {"db_path": "data/hbl2526.duckdb"}
-        ),
+        "io_manager": duckdb_io_manager.configured({"db_path": "data/hbl2526.duckdb"}),
         "file_io_manager": FilesystemIOManager(),
         "sportradar_api": sportradar_api,
         "kinexon_api": kinexon_api,

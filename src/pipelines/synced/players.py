@@ -1,10 +1,10 @@
+import difflib
 import logging
 import os
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
 import pandas as pd
-import difflib
+from dotenv import load_dotenv
 
 
 def extract_players_for_match(
@@ -148,9 +148,7 @@ def extract_players_for_match(
             if not name_matches:
                 return pd.Series([None, None, None])
             matched_name = name_matches[0]
-            matched_row = candidates[
-                candidates["full_name"] == matched_name
-            ].iloc[0]
+            matched_row = candidates[candidates["full_name"] == matched_name].iloc[0]
             return pd.Series(
                 [
                     matched_row["mapped_id"],

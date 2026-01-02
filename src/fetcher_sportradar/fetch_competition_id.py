@@ -1,6 +1,7 @@
 """Fetch competition ID from Sportradar Handball API."""
 
 import logging
+
 from sportradar_datacore_api.handball import HandballAPI
 
 NAME_COMPETITION = "1. Handball-Bundesliga"

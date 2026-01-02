@@ -16,8 +16,8 @@ Assumptions:
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import duckdb
 import pandas as pd
@@ -25,10 +25,10 @@ import pandas as pd
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.hbl_etl_dagster.utils.sportradar_kinexon_event_mapper import (
-    refine_throw_time_for_event,
-    render_goal_with_multifreeze,
     D_POSSESS,
     V_POSSESS_MAX,
+    refine_throw_time_for_event,
+    render_goal_with_multifreeze,
 )
 
 
@@ -104,7 +104,9 @@ def main(db_path: str, out_dir: str, limit: int) -> None:
         if fixture_id is None:
             continue
 
-        plot_title = f"Event sync — team  {row.get('teamName')}, event {row.get('personName')}"
+        plot_title = (
+            f"Event sync — team  {row.get('teamName')}, event {row.get('personName')}"
+        )
 
         # --- 3) Refine throw time for this event (1D heuristic) ---
         diag = refine_throw_time_for_event(
@@ -156,9 +158,7 @@ def main(db_path: str, out_dir: str, limit: int) -> None:
             )
 
         if not markers:
-            print(
-                f"No valid markers for eventId={row.get('eventId')}, skipping."
-            )
+            print(f"No valid markers for eventId={row.get('eventId')}, skipping.")
             continue
 
         print(
@@ -166,9 +166,7 @@ def main(db_path: str, out_dir: str, limit: int) -> None:
             f"with {len(markers)} markers ..."
         )
 
-        df_pos_fixture = df_positions[
-            df_positions["fixtureId"] == fixture_id
-        ].copy()
+        df_pos_fixture = df_positions[df_positions["fixtureId"] == fixture_id].copy()
         if df_pos_fixture.empty:
             print(f"No positions for fixtureId={fixture_id}, skipping.")
             continue

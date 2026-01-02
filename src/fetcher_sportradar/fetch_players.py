@@ -5,6 +5,7 @@ API based on match-events DataFrame.
 
 import logging
 from typing import List
+
 import pandas as pd
 
 
@@ -12,11 +13,7 @@ def extract_person_ids_from_setup(df_match_events: pd.DataFrame) -> List[str]:
     """
     Return unique personIds from setup/person events in a match-events DataFrame.
     """
-    col_type = (
-        "event_type"
-        if "event_type" in df_match_events.columns
-        else "eventType"
-    )
+    col_type = "event_type" if "event_type" in df_match_events.columns else "eventType"
     df_setup = df_match_events[
         (df_match_events.get("class") == "setup")
         & (df_match_events.get(col_type) == "person")
@@ -114,9 +111,7 @@ def enrich_and_filter_players(
     return df_players[cols].copy()
 
 
-def get_players_for_fixture(
-    api, df_match_events: pd.DataFrame
-) -> pd.DataFrame:
+def get_players_for_fixture(api, df_match_events: pd.DataFrame) -> pd.DataFrame:
     """
     High-level helper: given raw match-events DataFrame, return filtered player DataFrame.
     """
@@ -128,7 +123,5 @@ def get_players_for_fixture(
     if df_players.empty:
         return pd.DataFrame()
 
-    df_players_filtered = enrich_and_filter_players(
-        df_players, df_match_events
-    )
+    df_players_filtered = enrich_and_filter_players(df_players, df_match_events)
     return df_players_filtered

@@ -1,8 +1,9 @@
 # duckdb_helpers.py
 from contextlib import contextmanager
+from pathlib import Path
+
 from dagster import IOManager
 from filelock import FileLock
-from pathlib import Path
 
 
 @contextmanager
