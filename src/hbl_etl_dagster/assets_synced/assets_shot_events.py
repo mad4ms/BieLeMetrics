@@ -1,4 +1,3 @@
-# assets_sportradar_raw.py
 import pandas as pd
 from dagster import (
     AssetCheckExecutionContext,

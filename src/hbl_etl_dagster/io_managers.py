@@ -177,7 +177,7 @@ class DuckDBIOManager(IOManager):
 @io_manager
 def duckdb_io_manager(init_context):
     """
-    Configure with a simple 'db_path' in defs.py.
+    Configure with a simple 'db_path' in defs_debug.py (or via defs.py re-export).
     """
     db_path = init_context.resource_config["db_path"]
     return DuckDBIOManager(db_path=db_path)

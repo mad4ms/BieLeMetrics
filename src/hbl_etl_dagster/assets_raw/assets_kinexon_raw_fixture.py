@@ -1,4 +1,3 @@
-# assets_sportradar_raw.py
 import os
 from multiprocessing import context
 

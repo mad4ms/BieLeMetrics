@@ -1,4 +1,3 @@
-# assets_sportradar_raw.py
 
 # from __future__ import annotations
 
