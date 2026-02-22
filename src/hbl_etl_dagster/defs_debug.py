@@ -66,7 +66,6 @@ from .assets_synced.assets_shot_events import (
 )
 from .io_managers import duckdb_io_manager, in_memory_io_manager
 from .resources import kinexon_api, sportradar_api
-from .sensors import fixture_sensor
 
 SEASON_DEFAULT_CONFIG = {
     "ops": {

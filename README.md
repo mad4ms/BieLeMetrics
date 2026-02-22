@@ -127,6 +127,22 @@ The project is structured into several folders:
 
 ## Usage
 
+### Dagster (current pipeline entrypoint)
+
+The active Dagster definitions entrypoint is:
+
+```bash
+src/hbl_etl_dagster/defs_debug.py
+```
+
+`src/hbl_etl_dagster/defs.py` is kept as a compatibility re-export.
+
+Run locally with:
+
+```bash
+dagster dev -m hbl_etl_dagster.defs_debug
+```
+
 ### Downloading Data
 
 You can download game data for specific game IDs using:
