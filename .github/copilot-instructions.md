@@ -38,3 +38,8 @@ Rule of thumb: for production DAG behavior, implement in the active `assets_*` *
 - For new data products, add assets in active subfolders and register in `defs_debug.py`.
 - If removing legacy code, verify it is not imported by `defs_debug.py` first.
 - Keep changes minimal and avoid touching unrelated notebooks/tests unless requested.
+
+## Testing policy
+- Prefer tests for pure pipeline modules in `src/pipelines/*` (business logic).
+- Avoid coupling new tests to Dagster asset wrappers unless explicitly requested.
+- Use `assets/data_samples/*.csv` for lightweight integration-style checks of pipeline transforms.

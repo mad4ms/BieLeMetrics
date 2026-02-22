@@ -1,5 +1,3 @@
-# defs_debug_sportradar_raw.py
-
 from dagster import (
     AssetSelection,
     Definitions,

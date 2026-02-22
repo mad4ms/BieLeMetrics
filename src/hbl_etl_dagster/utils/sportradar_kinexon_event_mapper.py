@@ -197,7 +197,7 @@ class SportradarKinexonEventMapper:
 
         Merge key:
           - time: eventTime_ms ↔ timestamp_ms
-          - by: league_id  (player identity already resolved via PlayerLeagueMapper)
+          - by: league_id
 
         Returns:
             df_synced_goals: goals with attached Kinexon event columns and
