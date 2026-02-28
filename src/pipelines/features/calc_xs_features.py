@@ -49,14 +49,10 @@ def calculate_xs_features(
         df_defense = df_pos[df_pos["group_name"] == shot["team_name_defense"]]
 
         # --- ball position ---
-        df_ball = df_pos[
-            df_pos["league_id"].str.contains("ball", case=False, na=False)
-        ]
+        df_ball = df_pos[df_pos["league_id"].str.contains("ball", case=False, na=False)]
 
         # --- goalkeeper position ---
-        df_gk = df_defense[
-            df_defense["league_id"] == shot["goalkeeper_league_id"]
-        ]
+        df_gk = df_defense[df_defense["league_id"] == shot["goalkeeper_league_id"]]
 
         if df_ball.empty:
             dropped_no_ball += 1

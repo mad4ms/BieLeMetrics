@@ -6,10 +6,10 @@ from dagster import (
     Failure,
     Field,
     MetadataValue,
-    asset,
-    asset_check,
     TableColumn,
     TableSchema,
+    asset,
+    asset_check,
 )
 from sklearn.pipeline import Pipeline
 

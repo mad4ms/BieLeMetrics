@@ -17,15 +17,19 @@ def _sample(name: str) -> pd.DataFrame:
     return pd.read_csv(SAMPLES_DIR / name)
 
 
-def test_all_sample_csv_have_20_rows() -> None:
+def test_all_sample_csv_have_expected_sample_size() -> None:
     csv_files = sorted(SAMPLES_DIR.glob("*.csv"))
     assert csv_files
     for path in csv_files:
-        assert len(pd.read_csv(path)) == 20, path.name
+        n_rows = len(pd.read_csv(path))
+        # Sample exports are capped at 20 rows, but small source tables can have fewer.
+        assert 0 < n_rows <= 20, f"{path.name}: expected 1..20 rows, got {n_rows}"
 
 
 def test_normalize_time_from_pipeline_creates_event_time_ms() -> None:
-    goals = _sample("main.sportradar_goals_synced.csv")[["event_id", "event_time"]].copy()
+    goals = _sample("main.sportradar_goals_synced.csv")[
+        ["event_id", "event_time"]
+    ].copy()
     out = normalize_time(goals)
     assert "event_time_ms" in out.columns
     assert out["event_time_ms"].notna().all()

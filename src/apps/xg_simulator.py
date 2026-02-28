@@ -1,18 +1,17 @@
-import sys
-import os
 import logging
+import os
+import pickle
+import sys
+
+import joblib
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-from matplotlib.widgets import Button, RadioButtons, CheckButtons
-import joblib
-import pickle
+from matplotlib.widgets import Button, CheckButtons, RadioButtons
 
 # Add project root to path
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 # Constants
 GOAL_WIDTH = 3.0
@@ -31,9 +30,7 @@ def shot_angle_to_goal(
     left_post = (goal_x, goal_y - HALF_GOAL)
     right_post = (goal_x, goal_y + HALF_GOAL)
     angle_left = np.arctan2(left_post[1] - shooter_y, left_post[0] - shooter_x)
-    angle_right = np.arctan2(
-        right_post[1] - shooter_y, right_post[0] - shooter_x
-    )
+    angle_right = np.arctan2(right_post[1] - shooter_y, right_post[0] - shooter_x)
     return float(abs(angle_right - angle_left))
 
 
@@ -87,9 +84,7 @@ class XGSimulator:
         self.load_image()
 
         # Event handling
-        self.cid = self.fig.canvas.mpl_connect(
-            "button_press_event", self.onclick
-        )
+        self.cid = self.fig.canvas.mpl_connect("button_press_event", self.onclick)
 
         # UI Elements
         ax_radio = plt.axes([0.05, 0.05, 0.15, 0.15], facecolor="#e4e4e4")
@@ -143,13 +138,9 @@ class XGSimulator:
     def load_image(self):
         if os.path.exists(self.image_path):
             img = mpimg.imread(self.image_path)
-            self.ax.imshow(
-                img, extent=[0, COURT_LENGTH, 0, COURT_WIDTH], zorder=0
-            )
+            self.ax.imshow(img, extent=[0, COURT_LENGTH, 0, COURT_WIDTH], zorder=0)
         else:
-            print(
-                f"Warning: Image not found at {self.image_path}. Using blank court."
-            )
+            print(f"Warning: Image not found at {self.image_path}. Using blank court.")
             self.ax.set_xlim(0, COURT_LENGTH)
             self.ax.set_ylim(0, COURT_WIDTH)
             self.ax.set_aspect("equal")
@@ -214,10 +205,7 @@ class XGSimulator:
     def update_plot(self):
         # Clear points and patches (keep image)
         for artist in (
-            self.ax.lines
-            + self.ax.collections
-            + self.ax.patches
-            + self.ax.texts
+            self.ax.lines + self.ax.collections + self.ax.patches + self.ax.texts
         ):
             artist.remove()
 
@@ -268,9 +256,7 @@ class XGSimulator:
                 fontsize=8,
                 ha="center",
                 va="center",
-                bbox=dict(
-                    facecolor="white", alpha=0.7, edgecolor="none", pad=1
-                ),
+                bbox=dict(facecolor="white", alpha=0.7, edgecolor="none", pad=1),
                 zorder=3,
             )
 
@@ -303,9 +289,7 @@ class XGSimulator:
             )
         if self.defenders:
             dx, dy = zip(*self.defenders)
-            self.ax.plot(
-                dx, dy, "bo", markersize=8, label="Defender", zorder=9
-            )
+            self.ax.plot(dx, dy, "bo", markersize=8, label="Defender", zorder=9)
 
         self.fig.canvas.draw()
 
@@ -406,9 +390,7 @@ class XGSimulator:
             )
             gk_lateral_offset = float(abs(goalkeeper_y - goal_y))
 
-            v_goal = np.array(
-                [goal_x - shooter_x, goal_y - shooter_y], dtype=float
-            )
+            v_goal = np.array([goal_x - shooter_x, goal_y - shooter_y], dtype=float)
             v_gk = np.array(
                 [goalkeeper_x - shooter_x, goalkeeper_y - shooter_y],
                 dtype=float,
@@ -430,9 +412,7 @@ class XGSimulator:
             gk_along_shotline_dist = np.nan
 
         # Ball Features
-        ball_distance_to_goal = float(
-            np.hypot(ball_x - goal_x, ball_y - goal_y)
-        )
+        ball_distance_to_goal = float(np.hypot(ball_x - goal_x, ball_y - goal_y))
         ball_angle = shot_angle_to_goal(ball_x, ball_y, goal_x, goal_y)
 
         if np.isfinite(goalkeeper_x):
@@ -441,9 +421,7 @@ class XGSimulator:
             )
             angle_ball_gk = angle_between(
                 np.array([goal_x - ball_x, goal_y - ball_y], dtype=float),
-                np.array(
-                    [goalkeeper_x - ball_x, goalkeeper_y - ball_y], dtype=float
-                ),
+                np.array([goalkeeper_x - ball_x, goalkeeper_y - ball_y], dtype=float),
             )
         else:
             ball_distance_to_goalkeeper = np.nan
@@ -477,18 +455,14 @@ class XGSimulator:
             # Centroid
             cx = def_x.mean()
             cy = def_y.mean()
-            defense_centroid_dist_to_goal = float(
-                np.hypot(cx - goal_x, cy - goal_y)
-            )
+            defense_centroid_dist_to_goal = float(np.hypot(cx - goal_x, cy - goal_y))
             defense_spread = float(np.hypot(def_x - cx, def_y - cy).mean())
 
             # Shotline
             dist_to_line = []
             along_line = []
             in_cone = 0
-            v_goal = np.array(
-                [goal_x - shooter_x, goal_y - shooter_y], dtype=float
-            )
+            v_goal = np.array([goal_x - shooter_x, goal_y - shooter_y], dtype=float)
 
             for dx, dy in self.defenders:
                 dist = point_to_segment_distance(
@@ -580,9 +554,7 @@ if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(base_dir, "../../"))
 
-    model_path = os.path.join(
-        project_root, "data/models/xg_model_fixture.joblib"
-    )
+    model_path = os.path.join(project_root, "data/models/xg_model_fixture.joblib")
     image_path = os.path.join(project_root, "assets/handballfeld.png")
 
     if not os.path.exists(model_path):

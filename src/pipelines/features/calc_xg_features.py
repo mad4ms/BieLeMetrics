@@ -15,9 +15,7 @@ def shot_angle_to_goal(
     right_post = (goal_x, goal_y + HALF_GOAL)
 
     angle_left = np.arctan2(left_post[1] - shooter_y, left_post[0] - shooter_x)
-    angle_right = np.arctan2(
-        right_post[1] - shooter_y, right_post[0] - shooter_x
-    )
+    angle_right = np.arctan2(right_post[1] - shooter_y, right_post[0] - shooter_x)
     return float(abs(angle_right - angle_left))
 
 
@@ -66,9 +64,7 @@ def calculate_xg_features(
     Adds obstruction + GK coverage + defensive compactness features.
     Assumes df_positions_normalized already corresponds to the fixture passed in.
     """
-    attendance = df_match_normalized.get(
-        "attendance", pd.Series([np.nan])
-    ).iloc[0]
+    attendance = df_match_normalized.get("attendance", pd.Series([np.nan])).iloc[0]
     attendance = int(attendance) if pd.notna(attendance) else None
 
     cone_half_angle = np.deg2rad(cone_half_angle_deg)
@@ -104,14 +100,10 @@ def calculate_xg_features(
             df_defense["x_m"] - goal_x, df_defense["y_m"] - goal_y
         )
         avg_offense_distance = (
-            float(offense_distances.mean())
-            if len(offense_distances)
-            else np.nan
+            float(offense_distances.mean()) if len(offense_distances) else np.nan
         )
         avg_defense_distance = (
-            float(defense_distances.mean())
-            if len(defense_distances)
-            else np.nan
+            float(defense_distances.mean()) if len(defense_distances) else np.nan
         )
 
         # shooter position
@@ -160,9 +152,7 @@ def calculate_xg_features(
             else np.nan
         )
         shooter_lateral_offset = (
-            float(abs(shooter_y - goal_y))
-            if np.isfinite(shooter_y)
-            else np.nan
+            float(abs(shooter_y - goal_y)) if np.isfinite(shooter_y) else np.nan
         )
 
         # components (helpful for wings/side)
@@ -193,16 +183,12 @@ def calculate_xg_features(
             else np.nan
         )
         gk_lateral_offset = (
-            float(abs(goalkeeper_y - goal_y))
-            if np.isfinite(goalkeeper_y)
-            else np.nan
+            float(abs(goalkeeper_y - goal_y)) if np.isfinite(goalkeeper_y) else np.nan
         )
 
         # angle between shooter->goal and shooter->GK
         if np.isfinite(shooter_x) and np.isfinite(goalkeeper_x):
-            v_goal = np.array(
-                [goal_x - shooter_x, goal_y - shooter_y], dtype=float
-            )
+            v_goal = np.array([goal_x - shooter_x, goal_y - shooter_y], dtype=float)
             v_gk = np.array(
                 [goalkeeper_x - shooter_x, goalkeeper_y - shooter_y],
                 dtype=float,
@@ -222,9 +208,7 @@ def calculate_xg_features(
 
         # Ball features (keep your originals but robust)
         if np.isfinite(ball_x):
-            ball_distance_to_goal = float(
-                np.hypot(ball_x - goal_x, ball_y - goal_y)
-            )
+            ball_distance_to_goal = float(np.hypot(ball_x - goal_x, ball_y - goal_y))
             ball_angle = shot_angle_to_goal(ball_x, ball_y, goal_x, goal_y)
             if np.isfinite(goalkeeper_x):
                 ball_distance_to_goalkeeper = float(
@@ -264,9 +248,7 @@ def calculate_xg_features(
             along_line = []
             in_cone = 0
 
-            v_goal = np.array(
-                [goal_x - shooter_x, goal_y - shooter_y], dtype=float
-            )
+            v_goal = np.array([goal_x - shooter_x, goal_y - shooter_y], dtype=float)
             for _, d in df_defense.iterrows():
                 dx = float(d["x_m"])
                 dy = float(d["y_m"])
@@ -307,9 +289,7 @@ def calculate_xg_features(
         if not df_defense.empty:
             cx = float(df_defense["x_m"].mean())
             cy = float(df_defense["y_m"].mean())
-            defense_centroid_dist_to_goal = float(
-                np.hypot(cx - goal_x, cy - goal_y)
-            )
+            defense_centroid_dist_to_goal = float(np.hypot(cx - goal_x, cy - goal_y))
             defense_spread = float(
                 np.hypot(df_defense["x_m"] - cx, df_defense["y_m"] - cy).mean()
             )

@@ -89,8 +89,7 @@ def players(
             "n_unique_players": df_players_in_events["person_id"].nunique(),
             "n_original_players": len(df_match_players),
             "coverage_league_id_percent": (
-                df_players_in_events["league_id"].nunique()
-                / len(df_players_in_events)
+                df_players_in_events["league_id"].nunique() / len(df_players_in_events)
             )
             * 100,
             "n_columns": df_players_in_events.shape[1],

@@ -5,9 +5,7 @@ import pandas as pd
 from dagster import AssetExecutionContext, MetadataValue, asset
 from sklearn.pipeline import Pipeline
 
-from src.pipelines.ml.importance_xg import (
-    materialize_feature_importance_artifacts,
-)
+from src.pipelines.ml.importance_xg import materialize_feature_importance_artifacts
 
 # Assumption (matches your pipeline style):
 # - You already have an asset (e.g., `xg_model`) that returns a trained sklearn Pipeline.
@@ -74,9 +72,7 @@ def xg_feature_importance(
 
     context.add_output_metadata(
         {
-            "artifact_dir": MetadataValue.path(
-                str(Path(artifact_dir).resolve())
-            ),
+            "artifact_dir": MetadataValue.path(str(Path(artifact_dir).resolve())),
             "perm_plot": MetadataValue.path(artifacts.perm_plot_path),
             "gain_plot": MetadataValue.path(artifacts.xgb_plot_path),
             "perm_table": MetadataValue.path(artifacts.perm_table_path),

@@ -101,9 +101,7 @@ class DuckDBIOManager(IOManager):
 
                         # Alter table to add missing columns from tmp_df
                         existing_cols = set(
-                            con.execute(f"DESCRIBE {table_name}").df()[
-                                "column_name"
-                            ]
+                            con.execute(f"DESCRIBE {table_name}").df()["column_name"]
                         )
                         new_cols = set(obj.columns)
                         missing_cols = new_cols - existing_cols
@@ -177,7 +175,7 @@ class DuckDBIOManager(IOManager):
 @io_manager
 def duckdb_io_manager(init_context):
     """
-    Configure with a simple 'db_path' in defs_debug.py (or via defs.py re-export).
+    Configure with a simple 'db_path' in defs.py (or via defs_debug.py re-export).
     """
     db_path = init_context.resource_config["db_path"]
     return DuckDBIOManager(db_path=db_path)

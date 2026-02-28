@@ -109,12 +109,16 @@ def get_fixtures_for_season(api: HandballAPI, season_id: str) -> pd.DataFrame:
 def get_fixture_events(api: HandballAPI, fixture_id: str) -> pd.DataFrame:
     """Fetch events for a fixture."""
     try:
-        df_events = pd.DataFrame(fetch_events_for_fixture(api=api, fixture_id=fixture_id))
+        df_events = pd.DataFrame(
+            fetch_events_for_fixture(api=api, fixture_id=fixture_id)
+        )
         if df_events.empty:
             logger.error("No events found for fixture ID '%s'.", fixture_id)
             return pd.DataFrame()
 
-        logger.info("Fetched %d events for fixture ID '%s'.", len(df_events), fixture_id)
+        logger.info(
+            "Fetched %d events for fixture ID '%s'.", len(df_events), fixture_id
+        )
         return df_events
     except Exception:
         logger.exception("Failed to fetch fixture events.")
@@ -141,3 +145,20 @@ def get_players_for_fixture(
     except Exception:
         logger.exception("Failed to fetch players for fixture.")
         raise
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    from src.hbl_etl_dagster.utils.api_helper import get_api_kinexon, get_api_sportradar
+
+    load_dotenv()  # Load environment variables from .env file
+    # Example usage (for testing purposes)
+    api = get_api_sportradar()
+    competition_id = get_competition_id(api)
+    if competition_id:
+        season_id = get_season_id(api, competition_id, season_year=2023)
+        if season_id:
+            teams_df = get_teams_for_season(api, season_id)
+            fixtures_df = get_fixtures_for_season(api, season_id)
+            print(teams_df.head())
+            print(fixtures_df.head())

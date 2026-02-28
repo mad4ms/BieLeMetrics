@@ -23,12 +23,16 @@ def test_sportradar_get_players_for_fixture_normalizes_columns(monkeypatch) -> N
 
     monkeypatch.setattr(sportradar, "fetch_players_by_ids", fake_fetch_players_by_ids)
 
-    out = sportradar.get_players_for_fixture(api=object(), df_match_events=pd.DataFrame())
+    out = sportradar.get_players_for_fixture(
+        api=object(), df_match_events=pd.DataFrame()
+    )
     assert list(out.columns) == ["person_id", "name_full"]
     assert len(out) == 1
 
 
 def test_sportradar_get_competition_id_none(monkeypatch) -> None:
-    monkeypatch.setattr(sportradar, "fetch_competition_id", lambda api, competition_name: None)
+    monkeypatch.setattr(
+        sportradar, "fetch_competition_id", lambda api, competition_name: None
+    )
     out = sportradar.get_competition_id(api=object(), competition_name="X")
     assert out is None

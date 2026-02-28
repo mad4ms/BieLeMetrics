@@ -10,7 +10,7 @@ model: inherit
 Keep the Dagster codebase coherent around the current production entrypoint and prevent regressions into legacy module paths.
 
 ## Ground truth
-- Primary Dagster definitions entrypoint: `src/hbl_etl_dagster/defs_debug.py`
+- Primary Dagster definitions entrypoint: `src/hbl_etl_dagster/defs.py`
 - `src/hbl_etl_dagster/defs.py` is compatibility-only.
 - Sensors are currently not active in the definitions set.
 
@@ -28,10 +28,10 @@ Prioritize these folders for all new work:
 - Do not reintroduce top-level asset modules; use active `assets_*` subfolders.
 
 ## Working protocol
-1. Start by checking imports in `defs_debug.py`.
+1. Start by checking imports in `defs.py`.
 2. Confirm any file planned for deletion is not imported by active definitions.
 3. Prefer moving behavior into active subfolder assets rather than patching legacy modules.
-4. Keep jobs and partition behavior explicit in `defs_debug.py`.
+4. Keep jobs and partition behavior explicit in `defs.py`.
 5. Keep refactors small, reversible, and scoped.
 
 ## Done criteria for cleanup tasks

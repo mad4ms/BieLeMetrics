@@ -12,7 +12,9 @@ from typing import Optional
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
 
-from src.fetcher_kinexon.fetch_events_for_session import fetch_detected_events_for_session
+from src.fetcher_kinexon.fetch_events_for_session import (
+    fetch_detected_events_for_session,
+)
 from src.fetcher_kinexon.fetch_positions_for_fixture import fetch_positions_for_fixture
 from src.fetcher_kinexon.fetch_teams import fetch_teams_for_season
 
@@ -56,11 +58,14 @@ def get_sessions_for_team(
     if end_date is None:
         end_date = pd.Timestamp("2100-01-01", tz="UTC")
 
-    sessions = api.get_sessions_for_team(
-        team_id=int(team_id),
-        start=start_date,
-        end=end_date,
-    ) or []
+    sessions = (
+        api.get_sessions_for_team(
+            team_id=int(team_id),
+            start=start_date,
+            end=end_date,
+        )
+        or []
+    )
 
     sessions_dict = [s.to_dict() for s in sessions]
     df_sessions = pd.DataFrame(sessions_dict)
@@ -75,7 +80,9 @@ def get_detected_events_for_fixture(
     """Fetch detected events for a Kinexon session id."""
     logger.info("Fetching detected events for session_id=%d.", session_id)
     df_events = fetch_detected_events_for_session(api=api, session_id=session_id)
-    logger.info("Fetched %d detected events for session_id=%d.", len(df_events), session_id)
+    logger.info(
+        "Fetched %d detected events for session_id=%d.", len(df_events), session_id
+    )
     return df_events
 
 
@@ -86,5 +93,7 @@ def get_positions_for_session(
     """Fetch positional data for a Kinexon session id."""
     logger.info("Fetching positions for session_id=%d.", session_id)
     df_positions = fetch_positions_for_fixture(api=api, session_id=session_id)
-    logger.info("Fetched %d positions for session_id=%d.", len(df_positions), session_id)
+    logger.info(
+        "Fetched %d positions for session_id=%d.", len(df_positions), session_id
+    )
     return df_positions

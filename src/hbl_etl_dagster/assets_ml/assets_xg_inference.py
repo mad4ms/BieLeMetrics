@@ -12,7 +12,6 @@ from sklearn.pipeline import Pipeline
 
 from src.pipelines.ml.infer_xg import infer_xg, summarize_fixture_xg
 
-
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
 
@@ -54,8 +53,7 @@ def xg_predictions(
         "dagster/row_count": len(df_pred),
         "dagster/column_schema": TableSchema(
             columns=[
-                TableColumn(name=c, type=str(df_pred[c].dtype))
-                for c in df_pred.columns
+                TableColumn(name=c, type=str(df_pred[c].dtype)) for c in df_pred.columns
             ]
         ),
         "fixture_id": context.partition_key,

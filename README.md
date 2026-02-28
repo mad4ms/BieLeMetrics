@@ -132,7 +132,7 @@ The project is structured into several folders:
 The active Dagster definitions entrypoint is:
 
 ```bash
-src/hbl_etl_dagster/defs_debug.py
+src/hbl_etl_dagster/defs.py
 ```
 
 `src/hbl_etl_dagster/defs.py` is kept as a compatibility re-export.
@@ -140,7 +140,7 @@ src/hbl_etl_dagster/defs_debug.py
 Run locally with:
 
 ```bash
-dagster dev -m hbl_etl_dagster.defs_debug
+dagster dev -m hbl_etl_dagster.defs
 ```
 
 ### Downloading Data

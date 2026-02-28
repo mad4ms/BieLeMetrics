@@ -20,9 +20,7 @@ def set_team_name_mapping(mapping: Dict[str, str]) -> None:
     _team_name_mapping = mapping.copy()
 
 
-def normalize_team_name(
-    name: str, mapping: Optional[Dict[str, str]] = None
-) -> str:
+def normalize_team_name(name: str, mapping: Optional[Dict[str, str]] = None) -> str:
     mapping_to_use = mapping if mapping is not None else _team_name_mapping
     for key, value in mapping_to_use.items():
         if key in name:
@@ -171,9 +169,9 @@ def normalize_matches(
     )
 
     # extract team names (keep your exact semantics)
-    k[["team_name_home_kinexon", "team_name_away_kinexon"]] = k[
-        "description"
-    ].apply(lambda x: pd.Series(extract_team_names_from_match_name(x)))
+    k[["team_name_home_kinexon", "team_name_away_kinexon"]] = k["description"].apply(
+        lambda x: pd.Series(extract_team_names_from_match_name(x))
+    )
     s[["team_name_home_sportradar", "team_name_away_sportradar"]] = s[
         "nameLocal"
     ].apply(lambda x: pd.Series(extract_team_names_from_match_name(x)))

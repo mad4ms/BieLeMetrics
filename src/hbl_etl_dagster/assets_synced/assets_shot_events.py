@@ -11,9 +11,7 @@ from dagster import (
     asset_check,
 )
 
-from src.pipelines.synced.shot_events import (
-    sync_shot_events as sync_shot_events_fn,
-)
+from src.pipelines.synced.shot_events import sync_shot_events as sync_shot_events_fn
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -86,9 +84,7 @@ def shot_events(
         {
             "n_rows": len(df_shot_events),
             "n_unique_shot_events": df_shot_events["event_id"].nunique(),
-            "n_unique_throw_timestamps": df_shot_events[
-                "throw_timestamp_ms"
-            ].nunique(),
+            "n_unique_throw_timestamps": df_shot_events["throw_timestamp_ms"].nunique(),
             "n_columns": df_shot_events.shape[1],
             "preview": MetadataValue.md(
                 df_shot_events.head(100).to_markdown(index=False)
@@ -193,9 +189,7 @@ def check_shot_events_integrity(
             metadata={"skipped": "no partition context"},
         )
 
-    shot_events_part = shot_events[
-        shot_events["fixture_id"] == str(partition_key)
-    ]
+    shot_events_part = shot_events[shot_events["fixture_id"] == str(partition_key)]
 
     if shot_events_part.empty:
         return AssetCheckResult(
@@ -320,9 +314,7 @@ def check_shot_events_sync_result(
             vals = df[col].dropna().astype(float)
             if not vals.empty:
                 delta_stats[f"{col}_mean_ms"] = float(round(vals.mean(), 1))
-                delta_stats[f"{col}_median_ms"] = float(
-                    round(vals.median(), 1)
-                )
+                delta_stats[f"{col}_median_ms"] = float(round(vals.median(), 1))
                 delta_stats[f"{col}_std_ms"] = float(round(vals.std(), 1))
 
     return AssetCheckResult(
