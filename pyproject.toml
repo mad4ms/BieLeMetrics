@@ -59,3 +59,21 @@ build-backend = "setuptools.build_meta"
 
 [tool.pylint.'MESSAGES CONTROL']
 disable = ["relative-beyond-top-level", "E402"]
+
+[tool.mypy]
+python_version = "3.12"
+show_error_codes = true
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "operator", "return"]
+
+[[tool.mypy.overrides]]
+module = [
+    "fetcher_kinexon.*",
+    "fetcher_sportradar.*",
+    "hbl_etl_dagster.*",
+    "kinexon_handball_api.*",
+    "sportradar_datacore_api.*",
+    "sklearn.*",
+    "cv2",
+    "joblib",
+]
+ignore_missing_imports = true
