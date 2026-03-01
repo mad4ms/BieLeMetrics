@@ -1,37 +1,44 @@
 repos:
+  # Generic hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        exclude: ^log/
       - id: check-yaml
       - id: check-merge-conflict
       - id: debug-statements
 
-  - repo: https://github.com/psf/black
-    rev: 24.1.1
+  # Ruff: lint + format + import sort
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
     hooks:
-      - id: black
-        language_version: python3
-        exclude: ^src/_vendor/datacore_client/
+      - id: ruff
+        args: ["--fix"]
+        exclude: ^src/_vendor/
+      - id: ruff-format
+        exclude: ^src/_vendor/
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  # mypy: static typing
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
     hooks:
-      - id: isort
-        name: isort (python)
-        args: ["--profile", "black", "--line-length", "88"]
-        exclude: ^src/_vendor/datacore_client/
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.6
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
-    hooks:
-      - id: flake8
-        args: ["--max-line-length=88", "--extend-ignore=E203,W503,D200,D103"]
-        exclude: ^src/_vendor/datacore_client/
-
+  # Strip notebook outputs
   - repo: https://github.com/kynan/nbstripout
     rev: 0.7.1
     hooks:
       - id: nbstripout
-        name: Strip output from Jupyter notebooks
+
+  # Tests (via uv-managed env)
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: env PYTHONPATH=. uv run pytest test
+        language: system
+        pass_filenames: false

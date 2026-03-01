@@ -1,11 +1,9 @@
-# assets_sportradar_raw.py
 import pandas as pd
 from dagster import (
     AssetCheckResult,
     AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
-    Field,
     MetadataValue,
     asset,
     asset_check,
@@ -121,10 +119,6 @@ def players_sportradar_raw(
         }
     )
     return df_players
-
-
-import pandas as pd
-from dagster import AssetCheckResult, asset_check
 
 
 @asset_check(asset=fixture_events_sportradar_raw)

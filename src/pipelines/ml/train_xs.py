@@ -7,17 +7,11 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import (
-    accuracy_score,
-    brier_score_loss,
-    log_loss,
-    roc_auc_score,
-)
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
-
 
 # Feature List (xS):
 #     {
@@ -33,7 +27,6 @@ from xgboost import XGBClassifier
 def train_xs_model(
     df_features_xs: pd.DataFrame,
 ) -> Tuple[Pipeline, Dict[str, Any]]:
-
     logging.info("Training xS model...")
 
     TARGET_COL = "target"
@@ -70,9 +63,7 @@ def train_xs_model(
         "baseline_auc": roc_auc_score(y_val, baseline_proba),
         "baseline_logloss": log_loss(y_val, baseline_proba),
         "baseline_brier": brier_score_loss(y_val, baseline_proba),
-        "baseline_accuracy": accuracy_score(
-            y_val, (baseline_proba >= 0.5).astype(int)
-        ),
+        "baseline_accuracy": accuracy_score(y_val, (baseline_proba >= 0.5).astype(int)),
     }
 
     # --- preprocessing ---

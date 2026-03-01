@@ -5,13 +5,15 @@ import difflib
 import logging
 from typing import Dict, List, Optional, Tuple
 
+
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
+from fetcher_kinexon import fetch_teams_for_season
 
 
 def find_best_team_match(
     target_name: str, team_list: List[Dict], threshold: float = 0.8
-) -> Tuple[int, str, float]:
+) -> Tuple[Optional[int], Optional[str], float]:
     best_match = None
     best_score = 0.0
     best_id = None
@@ -43,7 +45,7 @@ def fetch_session_ids_for_fixtures(
     similarity_threshold: float = 0.8,
     season_year: str = "2024-25",
     logger: Optional[logging.Logger] = None,
-) -> Dict[str, str]:
+) -> Dict[str, int]:
     """
     Fetch session IDs for a list of fixture IDs from the Kinexon Handball API.
 
@@ -54,7 +56,7 @@ def fetch_session_ids_for_fixtures(
     Returns:
         Dict[str, str]: A dictionary mapping fixture IDs to session IDs.
     """
-    session_ids = {}
+    session_ids: Dict[str, int] = {}
     if logger:
         logger.info("Fetching session IDs for %d fixtures.", len(df_fixtures))
 
@@ -167,12 +169,13 @@ def fetch_session_ids_for_fixtures(
             if (name_team_home in group_names) or (matched_name in group_names):
                 # session id sometimes appears as 'session_id'
                 sid_series = df_session.get("session_id")
-                sid = (
+                sid_raw = (
                     sid_series.values[0] if isinstance(sid_series, pd.Series) else None
                 )
-                sid = int(sid) if sid is not None else None
+                sid = int(sid_raw) if sid_raw is not None else None
                 found = True
-                session_ids[fixture_id] = sid
+                if sid is not None and isinstance(fixture_id, str):
+                    session_ids[fixture_id] = sid
 
         if not found:
             if logger:

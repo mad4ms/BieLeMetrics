@@ -1,10 +1,6 @@
-import difflib
 import logging
-import os
-from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from dotenv import load_dotenv
 
 
 def normalize_match_detected_shots(

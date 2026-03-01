@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -109,8 +109,9 @@ def plot_event_sync(
         ]
     )
     if np.isfinite(ymax) and ymax > 0:
+        poss_mask: List[bool] = [bool(v) for v in possess]
         axD.fill_between(
-            x_ms, 0, ymax * 1.1, where=possess, alpha=0.2, label="Possession"
+            x_ms, 0, ymax * 1.1, where=poss_mask, alpha=0.2, label="Possession"
         )
 
     markers = [
@@ -547,19 +548,18 @@ def _refine_throw_times(
         # Acceleration at chosen row (if available)
         throw_acc = pd.NA
         try:
-            idx = res.get("throw_idx")
-            if idx is not None and "ball_acc" in df_pb.columns:
-                throw_acc = df_pb.loc[int(idx), "ball_acc"]
+            idx_obj = res.get("throw_idx")
+            if isinstance(idx_obj, (int, np.integer)) and "ball_acc" in df_pb.columns:
+                throw_acc = df_pb.loc[int(idx_obj), "ball_acc"]
         except Exception:
             throw_acc = pd.NA
 
         if debug_plot and plots_left > 0:
             event_ms = None
             try:
+                event_time_ms_val = goal.get("event_time_ms")
                 event_ms = (
-                    int(goal.get("event_time_ms"))
-                    if pd.notna(goal.get("event_time_ms"))
-                    else None
+                    int(event_time_ms_val) if pd.notna(event_time_ms_val) else None
                 )
             except Exception:
                 event_ms = None
@@ -570,9 +570,16 @@ def _refine_throw_times(
             except Exception:
                 kin_ms = None
 
+            last_possession_idx_obj = res.get("last_possession_idx")
+            last_possession_idx = (
+                int(cast(int, last_possession_idx_obj))
+                if isinstance(last_possession_idx_obj, (int, np.integer))
+                else None
+            )
+
             plot_event_sync(
                 df_pb=df_pb,
-                last_possession_idx=res.get("last_possession_idx"),
+                last_possession_idx=last_possession_idx,
                 event_ms=event_ms,
                 kin_ms=kin_ms,
                 throw_ms=throw_ms,
@@ -1022,7 +1029,7 @@ if __name__ == "__main__":
     # players
     db = duckdb.connect(con_duckdb)
     df_matches = db.execute(
-        f"""
+        """
         SELECT *
         FROM matches_normalized
         """

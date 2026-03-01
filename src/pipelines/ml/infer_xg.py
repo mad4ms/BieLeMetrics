@@ -73,9 +73,7 @@ def infer_xg(
     if "preprocess" in model.named_steps and isinstance(
         model.named_steps["preprocess"], ColumnTransformer
     ):
-        required = _required_columns_from_preprocessor(
-            model.named_steps["preprocess"]
-        )
+        required = _required_columns_from_preprocessor(model.named_steps["preprocess"])
         missing = sorted([c for c in required if c not in df.columns])
         if missing:
             raise ValueError(
@@ -124,9 +122,7 @@ def summarize_fixture_xg(
         return pd.DataFrame()
 
     if "fixture_id" not in df_pred.columns:
-        raise ValueError(
-            "df_pred must contain fixture_id for fixture summary."
-        )
+        raise ValueError("df_pred must contain fixture_id for fixture summary.")
 
     g = df_pred.groupby("fixture_id", as_index=False)
     agg = g.agg(
@@ -221,9 +217,7 @@ if __name__ == "__main__":
             model = pickle.load(f)
 
     if not isinstance(model, Pipeline):
-        raise TypeError(
-            f"Loaded model is not a sklearn Pipeline. Got: {type(model)}"
-        )
+        raise TypeError(f"Loaded model is not a sklearn Pipeline. Got: {type(model)}")
 
     # --- load features ---
     where = ""
@@ -255,9 +249,7 @@ if __name__ == "__main__":
 
     df_sum = summarize_fixture_xg(df_pred, proba_col=args.proba_col)
 
-    logging.info(
-        "Predictions head:\n%s", df_pred.head(10).to_string(index=False)
-    )
+    logging.info("Predictions head:\n%s", df_pred.head(10).to_string(index=False))
     logging.info("Fixture summary:\n%s", df_sum.to_string(index=False))
 
     # --- persist outputs ---

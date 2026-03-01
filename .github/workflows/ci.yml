@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    container: astral/uv:python${{ matrix.python-version }}-bookworm-slim
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # If you have uv.lock → prefer: uv sync --locked
+      - name: Install deps
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Ruff
+        run: uv run ruff check src test
+
+      - name: Mypy
+        run: uv run mypy src/
+
+      - name: Pytest
+        run: uv run pytest
+
+  build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    container: astral/uv:python3.13-bookworm-slim
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: bielemetrics-dist
+          path: dist/

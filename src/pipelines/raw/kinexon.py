@@ -1,46 +1,48 @@
+"""Raw Kinexon pipeline helpers.
+
+Pure business-logic wrappers around fetcher functions.
+No orchestration/persistence concerns should live here.
+"""
+
+from __future__ import annotations
+
 import logging
-import os
 from typing import Optional
 
 import pandas as pd
-from dotenv import load_dotenv
 from kinexon_handball_api.handball import HandballAPI
 
 from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
-from src.fetcher_kinexon.fetch_positions_for_fixture import (
-    fetch_positions_for_fixture,
-)
-from src.fetcher_kinexon.fetch_session_id_for_fixtures import (
-    fetch_session_ids_for_fixtures,
-)
-from src.fetcher_kinexon.fetch_teams import fetch_teams_for_season
+from src.fetcher_kinexon.fetch_positions_for_fixture import fetch_positions_for_fixture
+from src.fetcher_kinexon.fetch_teams_kinexon import fetch_teams_for_season
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_season_year(season_year: str) -> str:
+    """Normalize season format to ``YYYY-YY``.
+
+    Examples:
+    - "2025" -> "2025-26"
+    - "2025-26" -> "2025-26"
+    """
+    if len(season_year) == 4 and season_year.isdigit():
+        year = int(season_year)
+        return f"{year}-{str((year + 1) % 100).zfill(2)}"
+    return season_year
 
 
 def get_teams_for_season(
     api: HandballAPI,
     season_year: str = "2024-25",
 ) -> pd.DataFrame:
-    """
-    Fetch Kinexon teams for a given season.
-
-    Args:
-        api (HandballAPI): An instance of the HandballAPI.
-
-    Returns:
-        pd.DataFrame: DataFrame with team information.
-    """
-
-    # check if season year is provided and in format YYYY-YY,
-    # if only YYYY is given, convert to YYYY-YY
-    if len(season_year) == 4 and season_year.isdigit():
-        season_year = (
-            f"{season_year}-{str(int(season_year[-2:]) + 1).zfill(2)}"
-        )
-
-    teams_list = fetch_teams_for_season(api=api, season_year=season_year)
+    """Fetch Kinexon teams for a season."""
+    season = _normalize_season_year(season_year)
+    teams_list = fetch_teams_for_season(api=api, season_year=season)
     df_teams = pd.DataFrame(teams_list)
+    logger.info("Fetched %d Kinexon teams for season '%s'.", len(df_teams), season)
     return df_teams
 
 
@@ -50,23 +52,24 @@ def get_sessions_for_team(
     start_date: Optional[pd.Timestamp] = None,
     end_date: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch Kinexon sessions for a given team ID within an optional date range.
-    """
+    """Fetch Kinexon sessions for a team within an optional date range."""
     if start_date is None:
         start_date = pd.Timestamp("1970-01-01", tz="UTC")
-
     if end_date is None:
         end_date = pd.Timestamp("2100-01-01", tz="UTC")
 
     sessions = (
         api.get_sessions_for_team(
-            team_id=int(team_id), start=start_date, end=end_date
+            team_id=int(team_id),
+            start=start_date,
+            end=end_date,
         )
         or []
     )
+
     sessions_dict = [s.to_dict() for s in sessions]
     df_sessions = pd.DataFrame(sessions_dict)
+    logger.info("Fetched %d sessions for team_id=%s.", len(df_sessions), team_id)
     return df_sessions
 
 
@@ -74,19 +77,11 @@ def get_detected_events_for_fixture(
     api: HandballAPI,
     session_id: int,
 ) -> pd.DataFrame:
-    """Fetch detected events for a given Kinexon session ID."""
-
-    logging.info(
-        "Fetching detected events for Kinexon session ID %d.", session_id
-    )
-    df_events = fetch_detected_events_for_session(
-        api=api,
-        session_id=session_id,
-    )
-    logging.info(
-        "Fetched %d detected events for Kinexon session ID %d.",
-        len(df_events),
-        session_id,
+    """Fetch detected events for a Kinexon session id."""
+    logger.info("Fetching detected events for session_id=%d.", session_id)
+    df_events = fetch_detected_events_for_session(api=api, session_id=session_id)
+    logger.info(
+        "Fetched %d detected events for session_id=%d.", len(df_events), session_id
     )
     return df_events
 
@@ -95,46 +90,10 @@ def get_positions_for_session(
     api: HandballAPI,
     session_id: int,
 ) -> pd.DataFrame:
-    """Fetch positioning data for a given Kinexon session ID."""
-
-    logging.info(
-        "Fetching positioning data for Kinexon session ID %d.", session_id
-    )
-    df_positions = fetch_positions_for_fixture(
-        api=api,
-        session_id=session_id,
-    )
-    logging.info(
-        "Fetched %d positioning data points for Kinexon session ID %d.",
-        len(df_positions),
-        session_id,
+    """Fetch positional data for a Kinexon session id."""
+    logger.info("Fetching positions for session_id=%d.", session_id)
+    df_positions = fetch_positions_for_fixture(api=api, session_id=str(session_id))
+    logger.info(
+        "Fetched %d positions for session_id=%d.", len(df_positions), session_id
     )
     return df_positions
-
-
-if __name__ == "__main__":
-    import duckdb
-
-    con_duckdb = "./data/hbl_raw.duckdb"
-
-    logging.basicConfig(level=logging.INFO)
-    load_dotenv()
-
-    db = duckdb.connect(con_duckdb)
-
-    df_matches = db.execute(
-        f"""
-        SELECT *
-        FROM matches_normalized
-        """
-    ).df()
-
-    # unique session_id in positions_kinexon_raw
-    df_unique_sessions = db.execute(
-        f"""
-        SELECT DISTINCT session_id
-        FROM positions_kinexon_raw
-        WHERE session_id IS NOT NULL
-        """
-    ).df()
-    existing_session_ids = set(df_unique_sessions["session_id"].tolist())

@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 import pandas as pd
-from scipy.__config__ import show
 
 FIELD_IMAGE: Path = Path("assets/handballfeld.png")
 OUT_DIR: Path = Path("data/renders/")
@@ -123,7 +122,7 @@ def render_goal_with_multifreeze(
         )
         team_side = "Home" if is_home else "Away"
 
-        team_name = row_goal.get(f"team_name_offense", "N/A")
+        team_name = row_goal.get("team_name_offense", "N/A")
 
         # scores look like '{"fe7bdd16-3952-11ef-b585-af5c55c3771d": 1, "fe9e91c7-3952-11ef-bd62-af5c55c3771d": 0}'
 

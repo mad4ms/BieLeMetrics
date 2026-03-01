@@ -1,28 +1,16 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import (
-    accuracy_score,
-    brier_score_loss,
-    log_loss,
-    roc_auc_score,
-)
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
-from xgboost.callback import EarlyStopping
-
-from pathlib import Path
-
-import matplotlib.pyplot as plt
-from sklearn.inspection import permutation_importance
-
 
 # Feature List:
 #     {
@@ -48,8 +36,7 @@ from sklearn.inspection import permutation_importance
 
 def train_xg_model(
     df_features_xg: pd.DataFrame,
-) -> Tuple[object, Dict[str, Any]]:
-
+) -> Tuple[object, Dict[str, float | int], pd.DataFrame, pd.Series]:
     logging.info("Training xG model...")
 
     TARGET_COL = "target"
@@ -58,8 +45,7 @@ def train_xg_model(
     NUMERIC_FEATURES = [
         c
         for c in df_features_xg.columns
-        if c
-        not in {TARGET_COL, "fixture_id", "event_id", *CATEGORICAL_FEATURES}
+        if c not in {TARGET_COL, "fixture_id", "event_id", *CATEGORICAL_FEATURES}
     ]
 
     EXPERIMENTAL_DISABLED_FEATURES = ["sub_type", "attack_type"]
@@ -95,9 +81,7 @@ def train_xg_model(
         "baseline_auc": roc_auc_score(y_val, baseline_proba),
         "baseline_logloss": log_loss(y_val, baseline_proba),
         "baseline_brier": brier_score_loss(y_val, baseline_proba),
-        "baseline_accuracy": accuracy_score(
-            y_val, (baseline_proba >= 0.5).astype(int)
-        ),
+        "baseline_accuracy": accuracy_score(y_val, (baseline_proba >= 0.5).astype(int)),
     }
 
     # --- preprocessing ---
@@ -224,7 +208,7 @@ if __name__ == "__main__":
 
     with duckdb.connect(con_duckdb) as conn:
         df_features_xg = conn.execute(
-            f"""
+            """
             SELECT *
             FROM features_xg
             """

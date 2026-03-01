@@ -1,12 +1,9 @@
-# assets_sportradar_raw.py
 import pandas as pd
 from dagster import (
     AssetCheckExecutionContext,
     AssetCheckResult,
     AssetExecutionContext,
     DynamicPartitionsDefinition,
-    Failure,
-    Field,
     MetadataValue,
     asset,
     asset_check,
@@ -90,8 +87,7 @@ def players(
             "n_unique_players": df_players_in_events["person_id"].nunique(),
             "n_original_players": len(df_match_players),
             "coverage_league_id_percent": (
-                df_players_in_events["league_id"].nunique()
-                / len(df_players_in_events)
+                df_players_in_events["league_id"].nunique() / len(df_players_in_events)
             )
             * 100,
             "n_columns": df_players_in_events.shape[1],

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import logging
 import json
+import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -102,9 +101,7 @@ def compute_xgb_gain_importance_transformed(
 
     feature_names = pre.get_feature_names_out()
     booster = clf.get_booster()
-    score = booster.get_score(
-        importance_type=importance_type
-    )  # keys: f0, f1, ...
+    score = booster.get_score(importance_type=importance_type)  # keys: f0, f1, ...
 
     values = np.zeros(len(feature_names), dtype=float)
     for k, v in score.items():
@@ -150,9 +147,7 @@ def materialize_feature_importance_artifacts(
         n_repeats=n_repeats,
         random_state=random_state,
     )
-    gain_df = compute_xgb_gain_importance_transformed(
-        model, importance_type="gain"
-    )
+    gain_df = compute_xgb_gain_importance_transformed(model, importance_type="gain")
 
     perm_table = outdir / "perm_importance.parquet"
     gain_table = outdir / "xgb_gain_importance.parquet"
@@ -190,9 +185,9 @@ def materialize_feature_importance_artifacts(
 if __name__ == "__main__":
     import duckdb
 
-    from src.pipelines.ml.train_xg import (
+    from src.pipelines.ml.train_xg import (  # adjust import to your project
         train_xg_model,
-    )  # adjust import to your project
+    )
 
     logging.basicConfig(level=logging.INFO)
 
@@ -203,47 +198,15 @@ if __name__ == "__main__":
     with duckdb.connect(con_duckdb) as conn:
         df_features_xg = conn.execute("SELECT * FROM features_xg").df()
 
-    # 2) Train + get val split (recommended: modify train_xg_model to also return X_val/y_val)
-    #    If your current train_xg_model returns only (model, metrics), see fallback below.
-    try:
-        model, metrics, X_val, y_val = train_xg_model(
-            df_features_xg
-        )  # preferred API
-        logging.info("Loaded validation split from training function.")
-    except ValueError:
-        # Fallback if train_xg_model still returns only (model, metrics)
-        model, metrics = train_xg_model(df_features_xg)
-        logging.warning(
-            "train_xg_model did not return X_val/y_val; using a deterministic sample for importance."
-        )
-
-        TARGET_COL = "target"
-        CATEGORICAL_FEATURES = ["attack_type", "sub_type"]
-        drop_cols = {
-            TARGET_COL,
-            "fixture_id",
-            "event_id",
-            *CATEGORICAL_FEATURES,
-        }
-        numeric_features = [
-            c for c in df_features_xg.columns if c not in drop_cols
-        ]
-
-        X = df_features_xg[numeric_features + CATEGORICAL_FEATURES].copy()
-        y = df_features_xg[TARGET_COL].astype(int).copy()
-
-        rs = 42
-        idx = X.sample(n=min(2000, len(X)), random_state=rs).index
-        X_val = X.loc[idx]
-        y_val = y.loc[idx]
+    # 2) Train + get validation split from training API
+    model, metrics, X_val, y_val = train_xg_model(df_features_xg)
+    logging.info("Loaded validation split from training function.")
 
     logging.info("Model metrics:\n%s", json.dumps(metrics, indent=2))
 
     # plot of distribution of goalkeeper_distance_to_goal
     plt.figure(figsize=(8, 6))
-    plt.hist(
-        X_val["goalkeeper_distance_to_goal"], bins=30, color="blue", alpha=0.7
-    )
+    plt.hist(X_val["goalkeeper_distance_to_goal"], bins=30, color="blue", alpha=0.7)
     plt.title("Distribution of goalkeeper_distance_to_goal")
     plt.xlabel("goalkeeper_distance_to_goal")
     plt.ylabel("Frequency")

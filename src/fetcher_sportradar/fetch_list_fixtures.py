@@ -133,31 +133,31 @@ def expand_competitors_in_fixtures(
         fixture_dict["competitors"] = competitors_expanded.to_dict(orient="records")
         # insert entity_id_home and entity_id_away
         fixture_dict["entity_id_home"] = competitors_expanded[
-            competitors_expanded["is_home"] == True
+            competitors_expanded["is_home"]
         ]["entity_id"].values[0]
         fixture_dict["entity_id_away"] = competitors_expanded[
-            competitors_expanded["is_home"] == False
+            ~competitors_expanded["is_home"]
         ]["entity_id"].values[0]
         # insert name_team_home and name_team_away
         fixture_dict["name_team_home"] = competitors_expanded[
-            competitors_expanded["is_home"] == True
+            competitors_expanded["is_home"]
         ]["name_full_local"].values[0]
         fixture_dict["name_team_away"] = competitors_expanded[
-            competitors_expanded["is_home"] == False
+            ~competitors_expanded["is_home"]
         ]["name_full_local"].values[0]
         # insert score_home and score_away
         fixture_dict["result_score_home"] = competitors_expanded[
-            competitors_expanded["is_home"] == True
+            competitors_expanded["is_home"]
         ]["score"].values[0]
         fixture_dict["score_away"] = competitors_expanded[
-            competitors_expanded["is_home"] == False
+            ~competitors_expanded["is_home"]
         ]["score"].values[0]
         # insert resultPlace_home and resultPlace_away
         fixture_dict["result_place_home"] = competitors_expanded[
-            competitors_expanded["is_home"] == True
+            competitors_expanded["is_home"]
         ]["result_place"].values[0]
         fixture_dict["result_place_away"] = competitors_expanded[
-            competitors_expanded["is_home"] == False
+            ~competitors_expanded["is_home"]
         ]["result_place"].values[0]
         fixtures_expanded.append(fixture_dict)
     return pd.DataFrame(fixtures_expanded)

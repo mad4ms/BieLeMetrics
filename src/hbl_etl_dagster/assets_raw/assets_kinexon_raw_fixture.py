@@ -1,6 +1,4 @@
-# assets_sportradar_raw.py
 import os
-from multiprocessing import context
 
 import pandas as pd
 from dagster import (
@@ -9,7 +7,6 @@ from dagster import (
     AssetExecutionContext,
     DynamicPartitionsDefinition,
     Failure,
-    Field,
     MetadataValue,
     TableColumn,
     TableSchema,
@@ -250,6 +247,14 @@ def check_detected_events_have_unique_event_ids_when_present(
             detected_events_kinexon_raw["Id"].dropna().astype(str).shape[0]
             - detected_events_kinexon_raw["Id"].dropna().astype(str).nunique()
         )
+        if not ok:
+            return AssetCheckResult(
+                passed=False,
+                metadata={
+                    "failed": f"{col} column has duplicate values",
+                    "n_duplicates": n_dup,
+                },
+            )
     else:
         return AssetCheckResult(
             passed=True, metadata={"skipped": f"{col} column missing"}

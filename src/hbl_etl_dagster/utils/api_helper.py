@@ -7,6 +7,7 @@ translation of the notebook's configuration cells.
 
 import datetime
 import os
+from typing import Optional
 
 import duckdb
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ os.makedirs(PATH_TO_OUTPUT, exist_ok=True)
 date = datetime.date.today().strftime("%Y-%m-%d")
 
 
-def get_duckdb_connection(db_path: str = None):
+def get_duckdb_connection(db_path: Optional[str] = None):
     """Return a DuckDB connection using the same relative path as the notebook.
 
     By default it uses ../data/mydb{YEARS_SEASON}.duckdb to match the notebook.
