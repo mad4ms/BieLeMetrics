@@ -106,12 +106,14 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "pandas-stubs" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-order" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "types-tqdm" },
 ]
 
 [package.metadata]
@@ -120,12 +122,13 @@ requires-dist = [
     { name = "dagster-duckdb", specifier = ">=0.28.2" },
     { name = "dagster-webserver", specifier = ">=1.12.2" },
     { name = "duckdb", specifier = ">=1.4.1" },
-    { name = "kinexon-handball-api", directory = "../KinexonHandballAPI" },
+    { name = "kinexon-handball-api" },
     { name = "matplotlib" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "numpy" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "pandas" },
+    { name = "pandas-stubs", marker = "extra == 'dev'", specifier = ">=3.0.0.260204" },
     { name = "plotly", specifier = ">=6.4.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
@@ -139,9 +142,10 @@ requires-dist = [
     { name = "scikit-learn" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "shapely" },
-    { name = "sportradar-datacore-api", directory = "../SportradarDatacoreAPI" },
+    { name = "sportradar-datacore-api", specifier = ">=0.1.1" },
     { name = "thefuzz", specifier = ">=0.22.1" },
     { name = "tqdm" },
+    { name = "types-tqdm", marker = "extra == 'dev'", specifier = ">=4.67.3.20260205" },
     { name = "xgboost-cpu", specifier = ">=3.2.0" },
 ]
 provides-extras = ["dev"]
@@ -909,7 +913,7 @@ wheels = [
 [[package]]
 name = "kinexon-handball-api"
 version = "0.1.0"
-source = { directory = "../KinexonHandballAPI" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
@@ -922,33 +926,10 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "attrs", specifier = ">=25.3.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "mypy", marker = "extra == 'lint'", specifier = ">=1.8.0" },
-    { name = "pandas", specifier = ">=2.2.2" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
-    { name = "pydantic", specifier = ">=2.6" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pytest-order", specifier = ">=1.3.0" },
-    { name = "python-dotenv", specifier = ">=1.1.0" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "requests-mock", marker = "extra == 'dev'", specifier = ">=1.12" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.5" },
-    { name = "ruff", marker = "extra == 'lint'", specifier = ">=0.12.5" },
-    { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20250915" },
-    { name = "types-pyyaml", marker = "extra == 'lint'", specifier = ">=6.0.12.20250915" },
-    { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.31.0" },
-    { name = "types-requests", marker = "extra == 'lint'", specifier = ">=2.31.0" },
-    { name = "typing-extensions", specifier = ">=4.8" },
+sdist = { url = "https://files.pythonhosted.org/packages/a7/9e/ed6dadf25d15b1fa6156c6116f6def2f48db14b475f6570df14c734d66bb/kinexon_handball_api-0.1.0.tar.gz", hash = "sha256:4d8de7e91e87bb15b50c68cfda8013471721272c3670157717a0e1f19cab27cb", size = 87485, upload-time = "2026-03-01T07:58:17.467Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/4e/5abb5d7ec45daba58764d0c5fd4484de5baf042c18b626c0902861335ad9/kinexon_handball_api-0.1.0-py3-none-any.whl", hash = "sha256:29edb38262a7c94d5cad4de0c7c5723868d78eb31daa30f525c46d2a982ed8c3", size = 416740, upload-time = "2026-03-01T07:58:15.981Z" },
 ]
-provides-extras = ["dev", "lint"]
 
 [[package]]
 name = "kiwisolver"
@@ -1529,6 +1510,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/02/c6e04b694ffd68568297abd03588b6d30295265176a5c01b7459d3bc35a3/pandas-3.0.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:15860b1fdb1973fffade772fdb931ccf9b2f400a3f5665aef94a00445d7d8dd5", size = 11810974, upload-time = "2026-02-17T22:20:08.946Z" },
     { url = "https://files.pythonhosted.org/packages/89/41/d7dfb63d2407f12055215070c42fc6ac41b66e90a2946cdc5e759058398b/pandas-3.0.1-cp314-cp314t-win_amd64.whl", hash = "sha256:44f1364411d5670efa692b146c748f4ed013df91ee91e9bec5677fb1fd58b937", size = 10884622, upload-time = "2026-02-17T22:20:11.711Z" },
     { url = "https://files.pythonhosted.org/packages/68/b0/34937815889fa982613775e4b97fddd13250f11012d769949c5465af2150/pandas-3.0.1-cp314-cp314t-win_arm64.whl", hash = "sha256:108dd1790337a494aa80e38def654ca3f0968cf4f362c85f44c15e471667102d", size = 9452085, upload-time = "2026-02-17T22:20:14.331Z" },
+]
+
+[[package]]
+name = "pandas-stubs"
+version = "3.0.0.260204"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/1d/297ff2c7ea50a768a2247621d6451abb2a07c0e9be7ca6d36ebe371658e5/pandas_stubs-3.0.0.260204.tar.gz", hash = "sha256:bf9294b76352effcffa9cb85edf0bed1339a7ec0c30b8e1ac3d66b4228f1fbc3", size = 109383, upload-time = "2026-02-04T15:17:17.247Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/2f/f91e4eee21585ff548e83358332d5632ee49f6b2dcd96cb5dca4e0468951/pandas_stubs-3.0.0.260204-py3-none-any.whl", hash = "sha256:5ab9e4d55a6e2752e9720828564af40d48c4f709e6a2c69b743014a6fcb6c241", size = 168540, upload-time = "2026-02-04T15:17:15.615Z" },
 ]
 
 [[package]]
@@ -2411,8 +2404,8 @@ wheels = [
 
 [[package]]
 name = "sportradar-datacore-api"
-version = "0.1.0"
-source = { directory = "../SportradarDatacoreAPI" }
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
@@ -2422,27 +2415,10 @@ dependencies = [
     { name = "requests" },
     { name = "typing-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "attrs", specifier = ">=25.3" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
-    { name = "openapi-python-client", marker = "extra == 'dev'", specifier = ">=0.26" },
-    { name = "openapi-spec-validator", marker = "extra == 'dev'", specifier = ">=0.7" },
-    { name = "pandas", specifier = ">=2.2" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
-    { name = "pydantic", specifier = ">=2.6" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1" },
-    { name = "pytest-order", marker = "extra == 'dev'", specifier = ">=1.3" },
-    { name = "python-dotenv", specifier = ">=1.1" },
-    { name = "requests", specifier = ">=2.32" },
-    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
-    { name = "typing-extensions", specifier = ">=4.8" },
+sdist = { url = "https://files.pythonhosted.org/packages/5d/8e/3422a603bb3d2bd6c70ede9ad9ea5d7a5e577ac9878acddc77780de2b4c7/sportradar_datacore_api-0.1.3.tar.gz", hash = "sha256:b86af61872f953d7ee02f1b448c5651ce266449be3bb2bd6c71173b8779ea654", size = 912234, upload-time = "2026-03-01T17:57:54.574Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/63/b67017ae098d70525ff0505674d74d74f338437ba51a0dbc27ed34675d64/sportradar_datacore_api-0.1.3-py3-none-any.whl", hash = "sha256:21f3deb7b2ee00c6e326a6dd681bf182920aad8d5eeb51f2886c555fb092d43b", size = 2117783, upload-time = "2026-03-01T17:57:52.935Z" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "sqlalchemy"
@@ -2615,6 +2591,30 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
+]
+
+[[package]]
+name = "types-requests"
+version = "2.32.4.20260107"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/f3/a0663907082280664d745929205a89d41dffb29e89a50f753af7d57d0a96/types_requests-2.32.4.20260107.tar.gz", hash = "sha256:018a11ac158f801bfa84857ddec1650750e393df8a004a8a9ae2a9bec6fcb24f", size = 23165, upload-time = "2026-01-07T03:20:54.091Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/12/709ea261f2bf91ef0a26a9eed20f2623227a8ed85610c1e54c5805692ecb/types_requests-2.32.4.20260107-py3-none-any.whl", hash = "sha256:b703fe72f8ce5b31ef031264fe9395cac8f46a04661a79f7ed31a80fb308730d", size = 20676, upload-time = "2026-01-07T03:20:52.929Z" },
+]
+
+[[package]]
+name = "types-tqdm"
+version = "4.67.3.20260205"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "types-requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/46/790b9872523a48163bdda87d47849b4466017640e5259d06eed539340afd/types_tqdm-4.67.3.20260205.tar.gz", hash = "sha256:f3023682d4aa3bbbf908c8c6bb35f35692d319460d9bbd3e646e8852f3dd9f85", size = 17597, upload-time = "2026-02-05T04:03:19.721Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/da/7f761868dbaa328392356fab30c18ab90d14cce86b269e7e63328f29d4a3/types_tqdm-4.67.3.20260205-py3-none-any.whl", hash = "sha256:85c31731e81dc3c5cecc34c6c8b2e5166fafa722468f58840c2b5ac6a8c5c173", size = 23894, upload-time = "2026-02-05T04:03:18.48Z" },
 ]
 
 [[package]]

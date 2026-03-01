@@ -24,7 +24,7 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "kinexon-handball-api",
-    "sportradar-datacore-api",
+    "sportradar-datacore-api>=0.1.1",
     "duckdb>=1.4.1",
     "plotly>=6.4.0",
     "opencv-python>=4.11.0.86",
@@ -45,6 +45,8 @@ dev = [
     "respx>=0.21",
     "ruff>=0.5",
     "mypy>=1.10",
+    "pandas-stubs>=3.0.0.260204",
+    "types-tqdm>=4.67.3.20260205",
     "pre-commit>=4.5.1",
 ]
 
@@ -52,10 +54,28 @@ dev = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv.sources]
-kinexon-handball-api = { path = "../KinexonHandballAPI" }
-sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
+# [tool.uv.sources]
+# kinexon-handball-api = { path = "../KinexonHandballAPI" }
+# sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
 
 
 [tool.pylint.'MESSAGES CONTROL']
 disable = ["relative-beyond-top-level", "E402"]
+
+[tool.mypy]
+python_version = "3.12"
+show_error_codes = true
+disable_error_code = ["arg-type", "assignment", "attr-defined", "call-overload", "operator", "return"]
+
+[[tool.mypy.overrides]]
+module = [
+    "fetcher_kinexon.*",
+    "fetcher_sportradar.*",
+    "hbl_etl_dagster.*",
+    "kinexon_handball_api.*",
+    "sportradar_datacore_api.*",
+    "sklearn.*",
+    "cv2",
+    "joblib",
+]
+ignore_missing_imports = true

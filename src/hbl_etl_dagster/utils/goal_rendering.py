@@ -3,7 +3,10 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import cv2
+try:
+    import cv2
+except Exception:  # pragma: no cover - optional dependency for rendering
+    cv2 = None
 import pandas as pd
 
 FIELD_IMAGE: Path = Path("assets/handballfeld.png")
@@ -32,6 +35,11 @@ def render_goal_with_multifreeze(
       - "group id" (3=ball, 2/1=teams)
       - "league id", "full name"
     """
+    if cv2 is None:
+        raise ImportError(
+            "opencv-python is required for goal rendering; install system libs for cv2"
+        )
+
     field_image_path = field_image_path or FIELD_IMAGE
     out_dir = Path(out_dir or OUT_DIR)
     fps = fps or FPS
