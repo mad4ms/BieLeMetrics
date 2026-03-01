@@ -39,6 +39,6 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: uv run pytest test
+        entry: env PYTHONPATH=. uv run pytest test
         language: system
         pass_filenames: false

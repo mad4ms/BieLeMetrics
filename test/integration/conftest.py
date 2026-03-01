@@ -5,7 +5,7 @@ import os
 import pytest
 from dotenv import load_dotenv
 
-from src.hbl_etl_dagster.utils.api_helper import get_api_kinexon, get_api_sportradar
+from hbl_etl_dagster.utils.api_helper import get_api_kinexon, get_api_sportradar
 
 
 load_dotenv()

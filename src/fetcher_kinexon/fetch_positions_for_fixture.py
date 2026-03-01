@@ -59,6 +59,12 @@ def fetch_positions_for_fixture(api: HandballAPI, session_id: str) -> pd.DataFra
             if isinstance(resp, (bytes, bytearray))
             else getattr(resp, "content", None)
         )
+        if isinstance(payload, bytearray):
+            payload = bytes(payload)
+        if not isinstance(payload, bytes):
+            raise ValueError(
+                "download_positions_csv_via_custom returned no byte payload"
+            )
         df = read_positions_payload(payload)
         # attach session_id to positions dataframe
         df["session_id"] = session_id

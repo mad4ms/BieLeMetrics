@@ -198,35 +198,9 @@ if __name__ == "__main__":
     with duckdb.connect(con_duckdb) as conn:
         df_features_xg = conn.execute("SELECT * FROM features_xg").df()
 
-    # 2) Train + get val split (recommended: modify train_xg_model to also return X_val/y_val)
-    #    If your current train_xg_model returns only (model, metrics), see fallback below.
-    try:
-        model, metrics, X_val, y_val = train_xg_model(df_features_xg)  # preferred API
-        logging.info("Loaded validation split from training function.")
-    except ValueError:
-        # Fallback if train_xg_model still returns only (model, metrics)
-        model, metrics = train_xg_model(df_features_xg)
-        logging.warning(
-            "train_xg_model did not return X_val/y_val; using a deterministic sample for importance."
-        )
-
-        TARGET_COL = "target"
-        CATEGORICAL_FEATURES = ["attack_type", "sub_type"]
-        drop_cols = {
-            TARGET_COL,
-            "fixture_id",
-            "event_id",
-            *CATEGORICAL_FEATURES,
-        }
-        numeric_features = [c for c in df_features_xg.columns if c not in drop_cols]
-
-        X = df_features_xg[numeric_features + CATEGORICAL_FEATURES].copy()
-        y = df_features_xg[TARGET_COL].astype(int).copy()
-
-        rs = 42
-        idx = X.sample(n=min(2000, len(X)), random_state=rs).index
-        X_val = X.loc[idx]
-        y_val = y.loc[idx]
+    # 2) Train + get validation split from training API
+    model, metrics, X_val, y_val = train_xg_model(df_features_xg)
+    logging.info("Loaded validation split from training function.")
 
     logging.info("Model metrics:\n%s", json.dumps(metrics, indent=2))
 

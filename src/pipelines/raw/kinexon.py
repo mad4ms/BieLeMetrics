@@ -16,7 +16,7 @@ from src.fetcher_kinexon.fetch_events_for_session import (
     fetch_detected_events_for_session,
 )
 from src.fetcher_kinexon.fetch_positions_for_fixture import fetch_positions_for_fixture
-from src.fetcher_kinexon.fetch_teams import fetch_teams_for_season
+from src.fetcher_kinexon.fetch_teams_kinexon import fetch_teams_for_season
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def get_positions_for_session(
 ) -> pd.DataFrame:
     """Fetch positional data for a Kinexon session id."""
     logger.info("Fetching positions for session_id=%d.", session_id)
-    df_positions = fetch_positions_for_fixture(api=api, session_id=session_id)
+    df_positions = fetch_positions_for_fixture(api=api, session_id=str(session_id))
     logger.info(
         "Fetched %d positions for session_id=%d.", len(df_positions), session_id
     )

@@ -36,7 +36,7 @@ from xgboost import XGBClassifier
 
 def train_xg_model(
     df_features_xg: pd.DataFrame,
-) -> Tuple[object, Dict[str, Any]]:
+) -> Tuple[object, Dict[str, float | int], pd.DataFrame, pd.Series]:
     logging.info("Training xG model...")
 
     TARGET_COL = "target"

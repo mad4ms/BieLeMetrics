@@ -30,7 +30,7 @@ def normalize_team_name(name: str, mapping: Optional[Dict[str, str]] = None) -> 
 
 def find_best_team_match(
     target_name: str, team_list: List[Dict], threshold: float = 0.8
-) -> Tuple[int, str, float]:
+) -> Tuple[Optional[int], Optional[str], float]:
     best_match = None
     best_score = 0.0
     best_id = None

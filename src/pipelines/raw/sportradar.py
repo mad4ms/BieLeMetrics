@@ -55,7 +55,7 @@ def get_season_id(
         season_id = fetch_season_id(
             api=api,
             competition_id=competition_id,
-            season_year=season_year,
+            season_year=str(season_year),
         )
         if not season_id:
             logger.error(
