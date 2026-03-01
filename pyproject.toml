@@ -45,6 +45,8 @@ dev = [
     "respx>=0.21",
     "ruff>=0.5",
     "mypy>=1.10",
+    "pandas-stubs>=3.0.0.260204",
+    "types-tqdm>=4.67.3.20260205",
     "pre-commit>=4.5.1",
 ]
 
