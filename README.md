@@ -43,10 +43,9 @@ The goal of BieLeMetrics is to provide a seamless and automated pipeline to:
 
 ### Prerequisites
 
-- Python 3.7+
-- [Conda](https://docs.conda.io/en/latest/) or [virtualenv](https://virtualenv.pypa.io/en/latest/)
-- Required Python packages: See `requirements.txt`
-- Git submodules (to initialize external libraries)
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Required Python packages: declared in `pyproject.toml`
 
 ### Setup
 
@@ -56,24 +55,12 @@ The goal of BieLeMetrics is to provide a seamless and automated pipeline to:
    cd BieLeMetrics
    ```
 
-2. Initialize submodules:
+2. Initialize:
    ```bash
-   git submodule init
-   git submodule update
+   uv sync --no-dev
    ```
 
-3. Create and activate the Python environment:
-   ```bash
-   conda create -n bielemetrics python=3.12
-   conda activate bielemetrics
-   ```
-
-4. Install the dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. Configure environment variables:
+3. Configure environment variables:
    - Create a `.env` file in the root directory and set up necessary environment variables for your Kinexon and Sportradar API keys. Behold, the needed variables are (I must emphasize that I do not have any influence on this login procedure):
 
    ```bash
@@ -112,17 +99,15 @@ The project is structured into several folders:
 
 ```bash
 ├── assets
-├── data
-│   ├── events              # Event data from Sportradar and Kinexon
-│   ├── ml_stuff            # Machine learning-related files and outputs
-│   ├── processed           # Processed data ready for feature extraction
-│   └── raw                 # Raw data from sources
+│   ├── data_samples        # Sample CSVs for tests/integration checks
+│   └── events/videos       # Rendered example videos / demo assets
+├── notebooks               # Exploratory and pipeline notebooks
 └── src
-    ├── helper_download      # Scripts for downloading data
-    ├── helper_ml            # Machine learning helper functions
-    ├── helper_preprocessing # Preprocessing scripts for feature extraction
-    ├── utils                # Utility scripts
-    └── libs_external        # External libraries used
+   ├── fetcher_sportradar   # API fetch helpers (functions)
+   ├── fetcher_kinexon      # API fetch helpers (functions)
+   ├── pipelines            # Raw/normalized/synced/features/ml logic
+   ├── hbl_etl_dagster      # Dagster assets/jobs/resources/defs
+   └── apps                 # App entrypoints (e.g., simulator)
 ```
 
 ## Usage
@@ -135,8 +120,6 @@ The active Dagster definitions entrypoint is:
 src/hbl_etl_dagster/defs.py
 ```
 
-`src/hbl_etl_dagster/defs.py` is kept as a compatibility re-export.
-
 Run locally with:
 
 ```bash
@@ -145,39 +128,50 @@ dagster dev -m hbl_etl_dagster.defs
 
 ### Downloading Data
 
-You can download game data for specific game IDs using:
+Raw season-level data (competition, season, teams, fixtures, Kinexon sessions) is executed via:
 
 ```bash
-python src/download_game_by_id.py <game_id>
+dagster job execute -m hbl_etl_dagster.defs -j season_raw_refresh_job
 ```
 
-To download games for an entire game day in parallel:
-
-```bash
-python src/download_gamedays.py
-```
+This job populates fixture partitions that are then used for fixture-level ingestion.
 
 ### Processing Data
 
-After downloading, process the data by synchronizing and extracting features using:
+Run the fixture pipeline (raw → normalized → synced → features → ML assets) for a fixture partition:
 
 ```bash
-python src/process_game.py <sportradar_path> <kinexon_path>
+dagster job execute -m hbl_etl_dagster.defs -j fixture_raw_backfill_job --partition <fixture_id>
 ```
 
-Or to process multiple game days in parallel:
+For interactive execution and monitoring in browser, run:
 
 ```bash
-python src/process_gamedays.py
+dagster dev -m hbl_etl_dagster.defs
 ```
+
+
+### Direct Python modules (advanced)
+
+Fetcher files under `src/fetcher_sportradar/` and `src/fetcher_kinexon/` are importable function modules and generally are not standalone CLI scripts.
 
 ### Feature Extraction
 
-Processed game data will be saved in the `data/processed/` directory, where features are extracted into CSV files for training in MLJAR.
+Feature extraction is part of `fixture_raw_backfill_job` via the Dagster assets in:
+
+```bash
+src/hbl_etl_dagster/assets_features/
+```
 
 ### Training Machine Learning Model
 
-Once the feature extraction is completed, the resulting CSV files can be fed into MLJAR to train an expected goals model.
+Model training/inference assets are executed within the same fixture backfill job (assets in `src/hbl_etl_dagster/assets_ml/`).
+
+If you want to run only the Python pipeline functions directly, use modules under:
+
+```bash
+src/pipelines/ml/
+```
 
 ## Contributing
 
