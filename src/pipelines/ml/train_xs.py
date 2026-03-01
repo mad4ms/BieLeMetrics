@@ -27,7 +27,6 @@ from xgboost import XGBClassifier
 def train_xs_model(
     df_features_xs: pd.DataFrame,
 ) -> Tuple[Pipeline, Dict[str, Any]]:
-
     logging.info("Training xS model...")
 
     TARGET_COL = "target"

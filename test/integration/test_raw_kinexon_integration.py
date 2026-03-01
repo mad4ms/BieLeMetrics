@@ -4,7 +4,6 @@ import pytest
 
 from src.pipelines.raw.kinexon import (
     get_detected_events_for_fixture,
-    get_positions_for_session,
     get_sessions_for_team,
     get_teams_for_season,
 )

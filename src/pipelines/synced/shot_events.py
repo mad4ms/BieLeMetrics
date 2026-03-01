@@ -1022,7 +1022,7 @@ if __name__ == "__main__":
     # players
     db = duckdb.connect(con_duckdb)
     df_matches = db.execute(
-        f"""
+        """
         SELECT *
         FROM matches_normalized
         """

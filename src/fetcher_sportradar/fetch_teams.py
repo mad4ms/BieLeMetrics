@@ -1,5 +1,4 @@
 import logging
-from typing import Any, Dict, List
 
 import pandas as pd
 from sportradar_datacore_api.handball import HandballAPI

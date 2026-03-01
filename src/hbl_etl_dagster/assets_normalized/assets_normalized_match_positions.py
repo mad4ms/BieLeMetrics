@@ -1,13 +1,9 @@
 import pandas as pd
 from dagster import (
-    AssetCheckResult,
     AssetExecutionContext,
     DynamicPartitionsDefinition,
-    Failure,
-    Field,
     MetadataValue,
     asset,
-    asset_check,
 )
 
 from src.pipelines.normalized.match_positions import (

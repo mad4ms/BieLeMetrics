@@ -1,20 +1,16 @@
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
-from xgboost.callback import EarlyStopping
 
 # Feature List:
 #     {
@@ -41,7 +37,6 @@ from xgboost.callback import EarlyStopping
 def train_xg_model(
     df_features_xg: pd.DataFrame,
 ) -> Tuple[object, Dict[str, Any]]:
-
     logging.info("Training xG model...")
 
     TARGET_COL = "target"
@@ -213,7 +208,7 @@ if __name__ == "__main__":
 
     with duckdb.connect(con_duckdb) as conn:
         df_features_xg = conn.execute(
-            f"""
+            """
             SELECT *
             FROM features_xg
             """

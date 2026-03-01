@@ -17,7 +17,13 @@ def _missing(required: list[str]) -> list[str]:
 
 @pytest.fixture(scope="session")
 def sportradar_api():
-    required = ["BASE_URL", "AUTH_URL", "CLIENT_ID", "CLIENT_SECRET", "CLIENT_ORGANIZATION_ID"]
+    required = [
+        "BASE_URL",
+        "AUTH_URL",
+        "CLIENT_ID",
+        "CLIENT_SECRET",
+        "CLIENT_ORGANIZATION_ID",
+    ]
     missing = _missing(required)
     if missing:
         pytest.skip(f"Missing Sportradar env vars: {missing}")

@@ -1,10 +1,6 @@
 import difflib
-import logging
-import os
-from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from dotenv import load_dotenv
 
 
 def extract_players_for_match(
@@ -23,22 +19,12 @@ def extract_players_for_match(
     Returns:
         pd.DataFrame: DataFrame containing extracted players for the match.
     """
-    df_match_infos = (
-        df_match_normalized.copy()
-    )  # cols: season_id	fixture_id	session_id	start_time_local	start_time_utc	start_time	round_number	team_name_home	team_name_away	entity_id_home	entity_id_away	score_home	score_away	start_session	description	match_name	attendance	team_id_home_kinexon	team_id_away_kinexon
-    df_events = (
-        df_match_events_normalized_setup.copy()
-    )  # cols: fixture_id	class	entity_id	event_id	event_time	event_type	person_id	bib	name	position	subType	failure_reason	empty_net
-    df_detected_shots = (
-        df_match_detected_shots_normalized.copy()
-    )  # cols: timestamp	timestamp_ms	game_clock	period	player_id	distance	speed_ball	trajectory	shot_position_x	shot_position_y	hit_position_y	hit_position_z	success	shot_category	goalkeeper_id	shot_type	assisting_player_id	validated	id	event_type	league_id	session_id	fixture_id
-    df_positions = (
-        df_match_positions_normalized.copy()
-    )  # cols: timestamp_ms	formatted_local_time	sensor_id	mapped_id	number	full_name	league_id	group_id	group_name	x_m	y_m	speed_m_s	direction	acceleration	total_distance	metabolic_power	acceleration_load	session_id	fixture_id
+    df_match_infos = df_match_normalized.copy()  # cols: season_id	fixture_id	session_id	start_time_local	start_time_utc	start_time	round_number	team_name_home	team_name_away	entity_id_home	entity_id_away	score_home	score_away	start_session	description	match_name	attendance	team_id_home_kinexon	team_id_away_kinexon
+    df_events = df_match_events_normalized_setup.copy()  # cols: fixture_id	class	entity_id	event_id	event_time	event_type	person_id	bib	name	position	subType	failure_reason	empty_net
+    # df_detected_shots = df_match_detected_shots_normalized.copy()  # cols: timestamp	timestamp_ms	game_clock	period	player_id	distance	speed_ball	trajectory	shot_position_x	shot_position_y	hit_position_y	hit_position_z	success	shot_category	goalkeeper_id	shot_type	assisting_player_id	validated	id	event_type	league_id	session_id	fixture_id
+    df_positions = df_match_positions_normalized.copy()  # cols: timestamp_ms	formatted_local_time	sensor_id	mapped_id	number	full_name	league_id	group_id	group_name	x_m	y_m	speed_m_s	direction	acceleration	total_distance	metabolic_power	acceleration_load	session_id	fixture_id
 
-    df_match_players = (
-        df_match_players_normalized.copy()
-    )  # cols: date_of_birth	name_family_latin	name_family_local	name_full_latin	name_full_local	name_given_latin	name_given_local    nationality	person_id	height	weight	fixture_id
+    df_match_players = df_match_players_normalized.copy()  # cols: date_of_birth	name_family_latin	name_family_local	name_full_latin	name_full_local	name_given_latin	name_given_local    nationality	person_id	height	weight	fixture_id
 
     if df_match_infos.empty:
         return pd.DataFrame(
@@ -132,7 +118,6 @@ def extract_players_for_match(
 
         def fuzzy_match_player(row):
             name = row["name"]
-            group = row["team_name"]
             candidates = df_positions_unique_players[
                 df_positions_unique_players["fixture_id"] == row["fixture_id"]
             ]

@@ -1,15 +1,9 @@
 import pandas as pd
 from dagster import (
-    AssetCheckResult,
     AssetExecutionContext,
-    DynamicPartitionsDefinition,
-    Failure,
-    Field,
-    MetadataValue,
     TableColumn,
     TableSchema,
     asset,
-    asset_check,
 )
 from sklearn.pipeline import Pipeline
 
@@ -59,9 +53,6 @@ def ml_xg_model(
     return model
 
 
-from src.pipelines.ml.train_xs import train_xs_model as train_xs_model_fn
-
-
 @asset(
     io_manager_key="file_io_manager",
     group_name="ml",
@@ -79,28 +70,29 @@ def ml_xs_model(
     :param features_xs: xS feature DataFrame
     :return: Trained xS model pipeline
     """
+    return False
 
-    df_features_xs = features_xs.copy()
+    # df_features_xs = features_xs.copy()
 
-    model, metrics = train_xs_model_fn(df_features_xs=df_features_xs)
+    # model, metrics = train_xs_model_fn(df_features_xs=df_features_xs)
 
-    context.log.info("Trained xS model.")
+    # context.log.info("Trained xS model.")
 
-    context.add_output_metadata(
-        {
-            "dagster/row_count": len(df_features_xs),
-            "dagster/column_schema": TableSchema(
-                columns=[
-                    TableColumn(
-                        name=col,
-                        type=str(df_features_xs[col].dtype),
-                    )
-                    for col in df_features_xs.columns
-                ]
-            ),
-            "n_unique_fixtures": df_features_xs["fixture_id"].nunique(),
-            **metrics,
-        }
-    )
+    # context.add_output_metadata(
+    #     {
+    #         "dagster/row_count": len(df_features_xs),
+    #         "dagster/column_schema": TableSchema(
+    #             columns=[
+    #                 TableColumn(
+    #                     name=col,
+    #                     type=str(df_features_xs[col].dtype),
+    #                 )
+    #                 for col in df_features_xs.columns
+    #             ]
+    #         ),
+    #         "n_unique_fixtures": df_features_xs["fixture_id"].nunique(),
+    #         **metrics,
+    #     }
+    # )
 
-    return model
+    # return model

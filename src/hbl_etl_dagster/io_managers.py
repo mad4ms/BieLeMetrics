@@ -8,6 +8,7 @@ import duckdb
 import pandas as pd
 from dagster import IOManager, io_manager
 from filelock import FileLock
+# hbl_dagster/io_managers.py
 
 
 class DuckDBIOManager(IOManager):
@@ -179,10 +180,6 @@ def duckdb_io_manager(init_context):
     """
     db_path = init_context.resource_config["db_path"]
     return DuckDBIOManager(db_path=db_path)
-
-
-# hbl_dagster/io_managers.py
-from dagster import IOManager, io_manager
 
 
 class InMemoryIOManager(IOManager):

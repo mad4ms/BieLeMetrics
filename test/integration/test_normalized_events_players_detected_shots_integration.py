@@ -61,7 +61,9 @@ def test_normalized_events_players_detected_shots_chain(sportradar_api, kinexon_
     if session_id is None:
         kin_teams = kin_get_teams_for_season(kinexon_api, "2025")
         team_id_col = "id" if "id" in kin_teams.columns else "team_id"
-        sessions = get_sessions_for_team(kinexon_api, str(kin_teams.iloc[0][team_id_col]))
+        sessions = get_sessions_for_team(
+            kinexon_api, str(kin_teams.iloc[0][team_id_col])
+        )
         if sessions.empty:
             pytest.skip("No Kinexon sessions available for detected-shots test")
         sid_col = "id" if "id" in sessions.columns else "session_id"

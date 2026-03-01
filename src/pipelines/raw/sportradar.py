@@ -149,7 +149,7 @@ def get_players_for_fixture(
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    from src.hbl_etl_dagster.utils.api_helper import get_api_kinexon, get_api_sportradar
+    from src.hbl_etl_dagster.utils.api_helper import get_api_sportradar
 
     load_dotenv()  # Load environment variables from .env file
     # Example usage (for testing purposes)

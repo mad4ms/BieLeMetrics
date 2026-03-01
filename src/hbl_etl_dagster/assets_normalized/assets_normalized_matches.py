@@ -1,13 +1,8 @@
 import pandas as pd
 from dagster import (
-    AssetCheckResult,
     AssetExecutionContext,
-    DynamicPartitionsDefinition,
-    Failure,
-    Field,
     MetadataValue,
     asset,
-    asset_check,
 )
 
 from src.pipelines.normalized.matches import normalize_matches as normalize_matches_fn

@@ -5,8 +5,10 @@ import difflib
 import logging
 from typing import Dict, List, Optional, Tuple
 
+
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI
+from kinexon_handball_api.fetcher_kinexon import fetch_teams_for_season
 
 
 def find_best_team_match(

@@ -26,7 +26,6 @@ def calculate_xs_features(
     dropped_no_gk = 0
 
     for _, shot in df_shot_events.iterrows():
-
         # --- xS only defined for on-target shots ---
         if shot.get("on_target") is False:
             continue

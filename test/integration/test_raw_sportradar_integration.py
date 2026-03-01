@@ -23,7 +23,9 @@ def test_sportradar_season_flow(sportradar_api):
         competition_id = get_competition_id(sportradar_api)
     except TypeError as exc:
         if "one of the hex, bytes" in str(exc):
-            pytest.skip(f"Sportradar client parsing issue (league_id UUID is null): {exc}")
+            pytest.skip(
+                f"Sportradar client parsing issue (league_id UUID is null): {exc}"
+            )
         raise
     assert competition_id
 

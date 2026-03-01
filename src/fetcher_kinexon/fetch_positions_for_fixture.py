@@ -2,7 +2,7 @@ import gzip
 import io
 import logging
 import zipfile
-from typing import Any, Dict, List
+from typing import List
 
 import pandas as pd
 from kinexon_handball_api.handball import HandballAPI

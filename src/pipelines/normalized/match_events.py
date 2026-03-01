@@ -1,11 +1,4 @@
-import difflib
-import json
-import logging
-import os
-from typing import Dict, List, Optional, Tuple
-
 import pandas as pd
-from dotenv import load_dotenv
 
 PLAYER_COLS = ["bib", "name", "position"]
 

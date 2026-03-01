@@ -1,7 +1,6 @@
 # src/hbl_etl_dagster/resources.py
 
 from dagster import resource
-from dagster_duckdb import DuckDBResource
 
 from src.hbl_etl_dagster.utils.api_helper import get_api_kinexon, get_api_sportradar
 
