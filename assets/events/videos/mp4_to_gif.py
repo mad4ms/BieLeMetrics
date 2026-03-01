@@ -34,6 +34,4 @@ def mp4_to_gif(video_path, gif_path, fps=5, scale_percent=50, colors=256):
 
 
 # Example usage
-mp4_to_gif(
-    "assets/events/videos/demo.mp4", "assets/events/videos/demo.gif", fps=40
-)
+mp4_to_gif("assets/events/videos/demo.mp4", "assets/events/videos/demo.gif", fps=40)
