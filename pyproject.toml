@@ -52,9 +52,9 @@ dev = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv.sources]
-kinexon-handball-api = { path = "../KinexonHandballAPI" }
-sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
+# [tool.uv.sources]
+# kinexon-handball-api = { path = "../KinexonHandballAPI" }
+# sportradar-datacore-api = { path = "../SportradarDatacoreAPI" }
 
 
 [tool.pylint.'MESSAGES CONTROL']
