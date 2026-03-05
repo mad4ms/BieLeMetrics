@@ -1,5 +1,3 @@
-import os
-
 import pandas as pd
 from dagster import (
     AssetCheckExecutionContext,
@@ -22,12 +20,8 @@ from src.pipelines.raw.kinexon import (
 )
 
 
-# kinexon_get_positions_for_session
 @asset(
-    required_resource_keys={
-        "kinexon_api",
-        "io_manager",
-    },
+    required_resource_keys={"kinexon_api"},
     group_name="kinexon_raw",
     compute_kind="duckdb",
     description="Raw Kinexon positioning data for a single fixture (partitioned by fixture_id).",
@@ -52,58 +46,14 @@ def positions_kinexon_raw(
         context.log.warning("No session IDs found for fixture_id=%s", fixture_id)
         return pd.DataFrame()
 
-    # There can only be one session_id in df_match
     if "session_id" not in df_match.columns:
         df_match["session_id"] = df_match["id"]
 
-    session_id = df_match.iloc[0]["session_id"]
-    # to int
-    session_id = int(session_id)
+    session_id = int(df_match.iloc[0]["session_id"])
 
-    duckdb_io_manager = context.resources.io_manager
+    df_positions = kinexon_get_positions_for_session(api=api, session_id=session_id)
 
-    # check if session_id already present in table
-    with duckdb_io_manager._conn() as con:
-        # does table exist?
-        table_exists = (
-            con.execute(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'positions_kinexon_raw'"
-            ).fetchone()[0]
-            == 1
-        )
-        if table_exists:
-            existing_sessions = con.execute(
-                "SELECT DISTINCT session_id FROM positions_kinexon_raw"
-            ).fetchall()
-            existing_session_ids = {row[0] for row in existing_sessions}
-        else:
-            existing_session_ids = set()
-    if session_id in existing_session_ids:
-        # read existing data from DuckDB
-        with duckdb_io_manager._conn() as con:
-            df_positions = con.execute(
-                f"""
-                SELECT *
-                FROM positions_kinexon_raw
-                WHERE session_id = {session_id}
-                """
-            ).df()
-
-    else:
-        # check if file in format kinexon_positions_{session_id}.0.parquet.gzip exists
-        if os.path.exists(
-            f"data/positions/kinexon_positions_{session_id}.0.parquet.gzip"
-        ):
-            df_positions = pd.read_parquet(
-                f"data/positions/kinexon_positions_{session_id}.0.parquet.gzip"
-            )
-        else:
-            df_positions = kinexon_get_positions_for_session(
-                api=api, session_id=session_id
-            )
-    # insert fixture_id column for partitioning
     df_positions["fixture_id"] = str(fixture_id)
-    # and remove "fixtureId" column if exists
     if "fixtureId" in df_positions.columns:
         df_positions = df_positions.drop(columns=["fixtureId"])
 
@@ -191,15 +141,10 @@ def detected_events_kinexon_raw(
 @asset_check(asset=positions_kinexon_raw)
 def check_positions_kinexon_raw_notna(
     context: AssetCheckExecutionContext,
+    positions_kinexon_raw: pd.DataFrame,
 ) -> AssetCheckResult:
-    partition_key = context.run.tags["dagster/partition"]
-    df_match_position = context.resources.io_manager.load_partitioned_input(
-        table_name="positions_kinexon_raw",
-        partition_col="fixture_id",
-        partition_key=partition_key,
-    )
+    df_match_position = positions_kinexon_raw
 
-    # check if length is not zero, fail check if zero
     if df_match_position.empty:
         return AssetCheckResult(passed=False, metadata={"failed": "no rows"})
 

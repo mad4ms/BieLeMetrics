@@ -19,9 +19,6 @@ fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
     compute_kind="duckdb",
     partitions_def=fixtures_partition_def,
     description="Synced shot events for a single fixture (partitioned by fixture_id).",
-    deps=[
-        "match_positions_normalized",
-    ],
 )
 def shot_events(
     context: AssetExecutionContext,
@@ -29,52 +26,32 @@ def shot_events(
     match_events_normalized_goals: pd.DataFrame,
     match_detected_shots_normalized: pd.DataFrame,
     players: pd.DataFrame,
+    match_positions_normalized: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Extract synced shot events for a single fixture.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-
-    :param matches_normalized: Description
-    :type matches_normalized: pd.DataFrame
-    :param match_events_normalized_goals: Description
-    :type match_events_normalized_goals: pd.DataFrame
-    :param match_detected_shots_normalized: Description
-    :type match_detected_shots_normalized: pd.DataFrame
-    :param players: Description
-    :type players: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param matches_normalized: Non-partitioned match lookup (filtered by fixture_id below).
+    :param match_events_normalized_goals: Goal events for the current partition.
+    :param match_detected_shots_normalized: Detected shots for the current partition.
+    :param players: Synced players for the current partition.
+    :param match_positions_normalized: Positions for the current partition.
+    :return: Synced shot events DataFrame.
     """
     fixture_id = context.partition_key
 
-    df_match_detected_shots = match_detected_shots_normalized[
-        match_detected_shots_normalized["fixture_id"] == str(fixture_id)
-    ].copy()
-
-    df_match_events_goals = match_events_normalized_goals[
-        match_events_normalized_goals["fixture_id"] == str(fixture_id)
-    ].copy()
-
-    df_players_match = players[players["fixture_id"] == str(fixture_id)].copy()
-
-    df_positions = context.resources.io_manager.load_partitioned_input(
-        table_name="match_positions_normalized",
-        partition_key=fixture_id,
-        partition_col="fixture_id",
-    )
-
+    # matches_normalized is non-partitioned — filter manually
     df_match_normalized = matches_normalized[
         matches_normalized["fixture_id"] == str(fixture_id)
     ].copy()
 
     df_shot_events = sync_shot_events_fn(
         df_match_normalized=df_match_normalized,
-        df_match_events_normalized_goals=df_match_events_goals,
-        df_match_detected_shots_normalized=df_match_detected_shots,
-        df_positions_normalized=df_positions,
-        df_players=df_players_match,
+        df_match_events_normalized_goals=match_events_normalized_goals,
+        df_match_detected_shots_normalized=match_detected_shots_normalized,
+        df_positions_normalized=match_positions_normalized,
+        df_players=players,
     )
 
     context.log.info("Extracted %d synced shot events", len(df_shot_events))
@@ -98,7 +75,7 @@ def shot_events(
 )
 def check_shot_events_integrity(
     context: AssetCheckExecutionContext,
-    shot_events: pd.DataFrame,
+    shot_events: pd.DataFrame,  # current partition only (partition-aware IO manager)
 ) -> AssetCheckResult:
     # ------------------------------------------------------------------
     # 1. Column contract
@@ -129,14 +106,15 @@ def check_shot_events_integrity(
             description=f"Missing required columns: {sorted(missing_columns)}",
         )
 
-    # First execution / nothing materialized yet
     if shot_events.empty:
         return AssetCheckResult(passed=True)
 
     # ------------------------------------------------------------------
-    # 2. Global identity integrity
+    # 2. Global identity integrity — load full historical table
     #    (same event_id must not drift across fixtures)
     # ------------------------------------------------------------------
+    all_shot_events = context.resources.io_manager.load_full_table("shot_events")
+
     identity_key = ["event_id"]
 
     identity_payload = [
@@ -158,7 +136,7 @@ def check_shot_events_integrity(
     ]
 
     inconsistencies = (
-        shot_events.groupby(identity_key, dropna=False)[identity_payload]
+        all_shot_events.groupby(identity_key, dropna=False)[identity_payload]
         .nunique()
         .max(axis=1)
         .loc[lambda s: s > 1]
@@ -177,49 +155,37 @@ def check_shot_events_integrity(
         )
 
     # ------------------------------------------------------------------
-    # 3. Partition-wise checks (current fixture only)
+    # 3. Partition-wise checks — use the already-filtered `shot_events` param
     # ------------------------------------------------------------------
-    partition_key = context.run.tags.get("dagster/partition")
-
-    if partition_key is None:
-        return AssetCheckResult(
-            passed=True,
-            metadata={"skipped": "no partition context"},
-        )
-
-    shot_events_part = shot_events[shot_events["fixture_id"] == str(partition_key)]
-
-    if shot_events_part.empty:
+    if shot_events.empty:
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "no rows for partition",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
-    # event_id must be unique within a fixture
-    if not shot_events_part["event_id"].astype(str).is_unique:
+    if not shot_events["event_id"].astype(str).is_unique:
         n_dup = int(
-            shot_events_part["event_id"].astype(str).shape[0]
-            - shot_events_part["event_id"].astype(str).nunique()
+            shot_events["event_id"].astype(str).shape[0]
+            - shot_events["event_id"].astype(str).nunique()
         )
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "duplicate event_id within fixture",
                 "n_duplicates": n_dup,
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
-    # event_id must be non-null within a fixture
-    if shot_events_part["event_id"].isna().any():
+    if shot_events["event_id"].isna().any():
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "null event_id values",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
@@ -229,11 +195,11 @@ def check_shot_events_integrity(
     return AssetCheckResult(
         passed=True,
         metadata={
-            "fixture_id": partition_key,
-            "n_rows_fixture": len(shot_events_part),
-            "n_unique_events_fixture": shot_events_part["event_id"].nunique(),
-            "n_unique_event_ids_global": shot_events["event_id"].nunique(),
-            "n_unique_players_global": shot_events["person_id"].nunique(),
+            "fixture_id": context.partition_key,
+            "n_rows_fixture": len(shot_events),
+            "n_unique_events_fixture": shot_events["event_id"].nunique(),
+            "n_unique_event_ids_global": all_shot_events["event_id"].nunique(),
+            "n_unique_players_global": all_shot_events["person_id"].nunique(),
         },
     )
 
@@ -244,27 +210,18 @@ def check_shot_events_integrity(
 )
 def check_shot_events_sync_result(
     context: AssetCheckExecutionContext,
-    shot_events: pd.DataFrame,
+    shot_events: pd.DataFrame,  # current partition only (partition-aware IO manager)
 ) -> AssetCheckResult:
-    partition_key = context.run.tags.get("dagster/partition")
-
-    if partition_key is None:
-        return AssetCheckResult(
-            passed=True,
-            metadata={"skipped": "no partition context"},
-        )
-
-    df = shot_events[shot_events["fixture_id"] == str(partition_key)]
-
-    if df.empty:
+    if shot_events.empty:
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "no rows for fixture",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
+    df = shot_events
     n_rows = int(len(df))
 
     # ------------------------------------------------------------------
@@ -284,7 +241,7 @@ def check_shot_events_sync_result(
             passed=False,
             metadata={
                 "failed": "low detected-shot match coverage",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
                 "detected_pct": float(round(pct_detected * 100, 2)),
             },
         )
@@ -294,7 +251,7 @@ def check_shot_events_sync_result(
             passed=False,
             metadata={
                 "failed": "low throw-timestamp coverage",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
                 "throw_pct": float(round(pct_throw * 100, 2)),
             },
         )
@@ -318,7 +275,7 @@ def check_shot_events_sync_result(
     return AssetCheckResult(
         passed=True,
         metadata={
-            "fixture_id": partition_key,
+            "fixture_id": context.partition_key,
             "n_rows": n_rows,
             "detected_shot_coverage_pct": float(round(pct_detected * 100, 2)),
             "throw_timestamp_coverage_pct": float(round(pct_throw * 100, 2)),

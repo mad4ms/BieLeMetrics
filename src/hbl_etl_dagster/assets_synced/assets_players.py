@@ -21,9 +21,6 @@ fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
     compute_kind="duckdb",
     partitions_def=fixtures_partition_def,
     description="Synced players for a single fixture (partitioned by fixture_id).",
-    deps=[
-        "match_positions_normalized",
-    ],
 )
 def players(
     context: AssetExecutionContext,
@@ -31,61 +28,39 @@ def players(
     match_events_normalized_setup: pd.DataFrame,
     match_detected_shots_normalized: pd.DataFrame,
     match_players_normalized: pd.DataFrame,
-    # match_positions_normalized: pd.DataFrame,
+    match_positions_normalized: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Extract synced players for a single fixture.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param players_sportradar_raw: Description
-    :type players_sportradar_raw: pd.DataFrame
-    :param match_events_normalized_setup: Description
-    :type match_events_normalized_setup: pd.DataFrame
-    :param match_positions_normalized: Description
-    :type match_positions_normalized: pd.DataFrame
-    :param match_players_normalized: Description
-    :type match_players_normalized: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param matches_normalized: Non-partitioned match lookup (filtered by fixture_id below).
+    :param match_events_normalized_setup: Setup events for the current partition.
+    :param match_detected_shots_normalized: Detected shots for the current partition.
+    :param match_players_normalized: Players for the current partition.
+    :param match_positions_normalized: Positions for the current partition.
+    :return: Synced players DataFrame.
     """
     fixture_id = context.partition_key
 
+    # matches_normalized is non-partitioned — filter manually
     df_match = matches_normalized[
         matches_normalized["fixture_id"] == str(fixture_id)
     ].copy()
 
-    df_match_events_setup = match_events_normalized_setup[
-        match_events_normalized_setup["fixture_id"] == str(fixture_id)
-    ].copy()
-
-    df_match_detected_shots = match_detected_shots_normalized[
-        match_detected_shots_normalized["fixture_id"] == str(fixture_id)
-    ].copy()
-
-    df_match_players = match_players_normalized[
-        match_players_normalized["fixture_id"] == str(fixture_id)
-    ].copy()
-
-    df_match_positions = context.resources.io_manager.load_partitioned_input(
-        table_name="match_positions_normalized",
-        partition_key=fixture_id,
-        partition_col="fixture_id",
-    )
-
     df_players_in_events = extract_players_for_match_fn(
         df_match_normalized=df_match,
-        df_match_events_normalized_setup=df_match_events_setup,
-        df_match_detected_shots_normalized=df_match_detected_shots,
-        df_match_positions_normalized=df_match_positions,
-        df_match_players_normalized=df_match_players,
+        df_match_events_normalized_setup=match_events_normalized_setup,
+        df_match_detected_shots_normalized=match_detected_shots_normalized,
+        df_match_positions_normalized=match_positions_normalized,
+        df_match_players_normalized=match_players_normalized,
     )
     context.log.info("Extracted %d synced players", len(df_players_in_events))
     context.add_output_metadata(
         {
             "n_rows": len(df_players_in_events),
             "n_unique_players": df_players_in_events["person_id"].nunique(),
-            "n_original_players": len(df_match_players),
+            "n_original_players": len(match_players_normalized),
             "coverage_league_id_percent": (
                 df_players_in_events["league_id"].nunique() / len(df_players_in_events)
             )
@@ -106,7 +81,7 @@ def players(
 )
 def check_players_integrity(
     context: AssetCheckExecutionContext,
-    players: pd.DataFrame,
+    players: pd.DataFrame,  # current partition only (partition-aware IO manager)
 ) -> AssetCheckResult:
     # ------------------------------------------------------------------
     # 1. Column contract
@@ -142,14 +117,15 @@ def check_players_integrity(
             description=f"Missing required columns: {sorted(missing_columns)}",
         )
 
-    # First execution / nothing materialized yet
     if players.empty:
         return AssetCheckResult(passed=True)
 
     # ------------------------------------------------------------------
-    # 2. Global identity integrity
+    # 2. Global identity integrity — load full historical table
     #    (same identity must not drift across fixtures)
     # ------------------------------------------------------------------
+    all_players = context.resources.io_manager.load_full_table("players")
+
     identity_key = ["person_id", "entity_id", "league_id"]
 
     identity_payload = [
@@ -168,7 +144,7 @@ def check_players_integrity(
     ]
 
     inconsistencies = (
-        players.drop(columns=["fixture_id", "session_id"])
+        all_players.drop(columns=["fixture_id", "session_id"], errors="ignore")
         .groupby(identity_key, dropna=False)[identity_payload]
         .nunique()
         .max(axis=1)
@@ -188,50 +164,38 @@ def check_players_integrity(
         )
 
     # ------------------------------------------------------------------
-    # 3. Partition-wise checks (current fixture only)
+    # 3. Partition-wise checks — use the already-filtered `players` param
     # ------------------------------------------------------------------
-    partition_key = context.run.tags.get("dagster/partition")
-
-    if partition_key is None:
-        return AssetCheckResult(
-            passed=True,
-            metadata={"skipped": "no partition context"},
-        )
-
-    players_part = players[players["fixture_id"] == str(partition_key)]
-
-    if players_part.empty:
+    if players.empty:
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "no rows for partition",
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
-    # Uniqueness within fixture
-    dup_mask = players_part.duplicated(subset=identity_key)
+    dup_mask = players.duplicated(subset=identity_key)
     if dup_mask.any():
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": "duplicate (person_id, entity_id, league_id) within fixture",
                 "n_duplicates": int(dup_mask.sum()),
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
-    # Minimum player sanity check
     THRESHOLD_MIN_PLAYERS = 14
-    if len(players_part) < THRESHOLD_MIN_PLAYERS:
+    if len(players) < THRESHOLD_MIN_PLAYERS:
         return AssetCheckResult(
             passed=False,
             metadata={
                 "failed": (
-                    f"too few players: {len(players_part)} "
+                    f"too few players: {len(players)} "
                     f"(expected ≥ {THRESHOLD_MIN_PLAYERS})"
                 ),
-                "fixture_id": partition_key,
+                "fixture_id": context.partition_key,
             },
         )
 
@@ -241,10 +205,10 @@ def check_players_integrity(
     return AssetCheckResult(
         passed=True,
         metadata={
-            "fixture_id": partition_key,
-            "n_rows_fixture": len(players_part),
-            "n_unique_players_fixture": players_part["person_id"].nunique(),
-            "n_unique_identity_keys_global": players[identity_key]
+            "fixture_id": context.partition_key,
+            "n_rows_fixture": len(players),
+            "n_unique_players_fixture": players["person_id"].nunique(),
+            "n_unique_identity_keys_global": all_players[identity_key]
             .drop_duplicates()
             .shape[0],
         },

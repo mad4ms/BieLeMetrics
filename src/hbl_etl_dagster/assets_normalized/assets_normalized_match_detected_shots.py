@@ -28,21 +28,12 @@ def match_detected_shots_normalized(
     """
     Normalize match detected shots.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param detected_events_kinexon_raw: Description
-    :type detected_events_kinexon_raw: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param detected_events_kinexon_raw: Raw Kinexon detected events for the current partition.
+    :return: Normalized detected shots DataFrame.
     """
-    fixture_id = context.partition_key
-
-    df_fixture_detected_shots = detected_events_kinexon_raw[
-        detected_events_kinexon_raw["fixture_id"] == str(fixture_id)
-    ].copy()
-
     df_normalized = normalize_match_detected_shots_fn(
-        detected_events_kinexon_raw=df_fixture_detected_shots,
+        detected_events_kinexon_raw=detected_events_kinexon_raw,
     )
 
     context.log.info("Normalized %d match detected shots", len(df_normalized))

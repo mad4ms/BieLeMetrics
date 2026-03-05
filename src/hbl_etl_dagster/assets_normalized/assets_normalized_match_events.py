@@ -32,21 +32,12 @@ def match_events_normalized(
     """
     Normalize match events.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param fixture_events_sportradar_raw: Description
-    :type fixture_events_sportradar_raw: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param fixture_events_sportradar_raw: Raw Sportradar events for the current partition.
+    :return: Normalized events DataFrame.
     """
-    fixture_id = context.partition_key
-
-    df_fixture_events_sr = fixture_events_sportradar_raw[
-        fixture_events_sportradar_raw["fixture_id"] == str(fixture_id)
-    ].copy()
-
     df_normalized = normalize_match_events_fn(
-        df_fixture_events_sportradar_raw=df_fixture_events_sr,
+        df_fixture_events_sportradar_raw=fixture_events_sportradar_raw,
     )
 
     context.log.info("Normalized %d match events", len(df_normalized))
@@ -81,21 +72,12 @@ def match_events_normalized_setup(
     """
     Normalize match events setup.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param match_events_normalized: Description
-    :type match_events_normalized: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param match_events_normalized: Normalized events for the current partition.
+    :return: Setup events DataFrame.
     """
-    fixture_id = context.partition_key
-
-    df_match_events_normalized = match_events_normalized[
-        match_events_normalized["fixture_id"] == str(fixture_id)
-    ].copy()
-
     df_setup = normalize_match_events_setup_fn(
-        df_match_events_normalized=df_match_events_normalized,
+        df_match_events_normalized=match_events_normalized,
     )
 
     context.log.info("Normalized %d match events setup", len(df_setup))
@@ -123,21 +105,12 @@ def match_events_normalized_goals(
     """
     Normalize match events goals.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param match_events_normalized: Description
-    :type match_events_normalized: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param match_events_normalized: Normalized events for the current partition.
+    :return: Goals events DataFrame.
     """
-    fixture_id = context.partition_key
-
-    df_match_events_normalized = match_events_normalized[
-        match_events_normalized["fixture_id"] == str(fixture_id)
-    ].copy()
-
     df_goals = normalize_match_events_goals_fn(
-        df_match_events_normalized=df_match_events_normalized,
+        df_match_events_normalized=match_events_normalized,
     )
 
     context.log.info("Normalized %d match events goals", len(df_goals))

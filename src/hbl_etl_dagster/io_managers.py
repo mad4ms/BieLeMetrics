@@ -151,26 +151,28 @@ class DuckDBIOManager(IOManager):
         table_name = upstream_key.to_user_string().replace("/", "_")
         with self._conn() as con:
             try:
+                if context.has_asset_partitions:
+                    partition_col = context.upstream_output.definition_metadata.get(
+                        "partition_column", "fixture_id"
+                    )
+                    partition_key = context.asset_partition_key
+                    return con.execute(
+                        f"SELECT * FROM {table_name} WHERE {partition_col} = ?",
+                        [partition_key],
+                    ).fetch_df()
                 return con.execute(f"SELECT * FROM {table_name}").fetch_df()
             except duckdb.CatalogException as e:
                 raise RuntimeError(
                     f"DuckDB table for asset {upstream_key} not found: {e}"
                 ) from e
 
-    # positions_kinexon_raw asset can be large, so we add a method to load only a partition
-    def load_partitioned_input(
-        self, table_name: str, partition_key: str, partition_col: str
-    ) -> pd.DataFrame:
+    def load_full_table(self, table_name: str) -> pd.DataFrame:
+        """Load an entire table regardless of partition context. Use for global integrity checks."""
         with self._conn() as con:
             try:
-                query = f"""
-                SELECT *
-                FROM {table_name}
-                WHERE {partition_col} = ?
-                """
-                return con.execute(query, [partition_key]).fetch_df()
+                return con.execute(f"SELECT * FROM {table_name}").fetch_df()
             except duckdb.CatalogException as e:
-                raise RuntimeError(f"DuckDB error: {e}") from e
+                raise RuntimeError(f"DuckDB table '{table_name}' not found: {e}") from e
 
 
 @io_manager
