@@ -17,7 +17,7 @@ def fetch_list_fixtures(api: HandballAPI, season_id: str) -> list:
         list: A list of fixtures.
     """
     logging.debug("Fetching fixtures for season ID %s", season_id)
-    fixtures = api.get_list_matches_by_season_id(season_id)
+    fixtures = api.list_matches_by_season(season_id)
 
     if fixtures:
         logging.debug(

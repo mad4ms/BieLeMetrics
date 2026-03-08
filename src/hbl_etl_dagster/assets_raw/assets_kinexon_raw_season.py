@@ -62,8 +62,8 @@ def sessions_kinexon_raw(
 ) -> pd.DataFrame:
     api = context.resources.kinexon_api
 
-    date_start = fixtures_sportradar_raw["startTimeLocal"].min()
-    date_end = fixtures_sportradar_raw["startTimeLocal"].max()
+    date_start = pd.to_datetime(fixtures_sportradar_raw["startTimeLocal"].min())
+    date_end = pd.to_datetime(fixtures_sportradar_raw["startTimeLocal"].max())
 
     df_sessions = pd.DataFrame()
     for team_id in teams_kinexon_raw["id"]:

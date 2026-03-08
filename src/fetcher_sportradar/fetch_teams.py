@@ -38,7 +38,7 @@ def fetch_teams_by_season_id(api: HandballAPI, season_id: str) -> pd.DataFrame:
         if not team_details:
             continue
 
-        df_details = pd.json_normalize(team_details[0].to_dict())
+        df_details = pd.json_normalize(team_details.to_dict())
 
         # keep only known cols
         cols_present = [c for c in columns_map.keys() if c in df_details.columns]

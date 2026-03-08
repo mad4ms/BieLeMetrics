@@ -52,6 +52,20 @@ def projection_along_ray(px, py, ax, ay, bx, by) -> float:
     return float(np.dot(ap, ab) / denom)
 
 
+def _positions_for_timestamp(
+    positions_by_timestamp: pd.DataFrame, timestamp_ms: object
+) -> pd.DataFrame:
+    try:
+        df_positions_shot = positions_by_timestamp.loc[timestamp_ms]
+    except KeyError:
+        return positions_by_timestamp.iloc[0:0].copy()
+
+    if isinstance(df_positions_shot, pd.Series):
+        return df_positions_shot.to_frame().T
+
+    return df_positions_shot
+
+
 def calculate_xg_features(
     df_match_normalized: pd.DataFrame,
     df_shot_events: pd.DataFrame,
@@ -68,6 +82,20 @@ def calculate_xg_features(
 
     cone_half_angle = np.deg2rad(cone_half_angle_deg)
 
+    position_cols = ["timestamp_ms", "group_name", "league_id", "x_m", "y_m"]
+    available_position_cols = [
+        col for col in position_cols if col in df_positions_normalized.columns
+    ]
+    df_positions_view = df_positions_normalized[available_position_cols].copy()
+
+    if "timestamp_ms" in df_positions_view.columns:
+        df_positions_view["timestamp_ms"] = pd.to_numeric(
+            df_positions_view["timestamp_ms"], errors="coerce"
+        )
+        positions_by_timestamp = df_positions_view.set_index("timestamp_ms", drop=False)
+    else:
+        positions_by_timestamp = df_positions_view
+
     features_list = []
     for _, shot in df_shot_events.iterrows():
         event_id = shot["event_id"]
@@ -79,9 +107,9 @@ def calculate_xg_features(
         is_home_team = team_name_offense == shot.get("team_name_home")
 
         # positions at timestamp
-        df_positions_shot = df_positions_normalized[
-            df_positions_normalized["timestamp_ms"] == timestamp_ms
-        ]
+        df_positions_shot = _positions_for_timestamp(
+            positions_by_timestamp, timestamp_ms
+        )
         df_offense = df_positions_shot[
             df_positions_shot["group_name"] == team_name_offense
         ]

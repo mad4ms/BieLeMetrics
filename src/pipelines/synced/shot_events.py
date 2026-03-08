@@ -19,7 +19,11 @@ from src.hbl_etl_dagster.utils.goal_rendering import (
 def _ts_to_ms(series_or_ts):
     s = pd.to_datetime(series_or_ts, utc=True, errors="coerce")
     if isinstance(s, pd.Series):
-        return s.astype("int64") // 10**6
+        # Cast to ms precision before converting to int64.
+        # In pandas 3.x, datetime64[us] astype("int64") gives microseconds,
+        # so dividing by 10**6 would yield seconds (wrong). Casting to ms first
+        # ensures astype("int64") always returns milliseconds since epoch.
+        return s.astype("datetime64[ms, UTC]").astype("int64")
     return None if pd.isna(s) else int(s.value // 10**6)
 
 
@@ -592,7 +596,7 @@ def _refine_throw_times(
             {
                 "event_id": goal.get("event_id"),
                 "throw_timestamp_ms": throw_ms,
-                "throw_ts": pd.to_datetime(throw_ms, unit="ms", utc=True),
+                "throw_ts": pd.to_datetime(throw_ms, unit="ms"),
                 "throw_acceleration": throw_acc,
                 "method": res.get("method"),
             }
@@ -897,7 +901,9 @@ def sync_shot_events(
         and not df_goals["detected_events_shot_time"].isna().all()
     ):
         df_goals["time_diff_detected_shot_throw_ms"] = (
-            df_goals["detected_events_shot_time"].astype("int64") // 1_000_000
+            df_goals["detected_events_shot_time"]
+            .astype("datetime64[ms, UTC]")
+            .astype("int64")
         ) - df_goals["throw_timestamp_ms"]
 
     if "event_time_ms" in df_goals.columns and "throw_timestamp_ms" in df_goals.columns:

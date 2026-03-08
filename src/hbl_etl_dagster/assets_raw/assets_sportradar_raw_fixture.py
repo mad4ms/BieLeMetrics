@@ -206,16 +206,24 @@ def players_fixture_id_matches_events_when_present(
     if players_sportradar_raw.empty:
         return AssetCheckResult(passed=True, metadata={"skipped": "no rows"})
 
-    if "fixtureId" not in players_sportradar_raw.columns:
+    fixture_col = None
+    if "fixture_id" in players_sportradar_raw.columns:
+        fixture_col = "fixture_id"
+    elif "fixtureId" in players_sportradar_raw.columns:
+        fixture_col = "fixtureId"
+
+    if fixture_col is None:
         return AssetCheckResult(
-            passed=True, metadata={"skipped": "fixtureId column missing"}
+            passed=True,
+            metadata={"skipped": "fixture_id/fixtureId column missing"},
         )
 
-    vals = players_sportradar_raw["fixtureId"].dropna().astype(str).unique().tolist()
+    vals = players_sportradar_raw[fixture_col].dropna().astype(str).unique().tolist()
     ok = len(vals) <= 1
     return AssetCheckResult(
         passed=bool(ok),
         metadata={
+            "fixture_column": fixture_col,
             "distinct_fixtureId_values": vals[:10],
             "n_distinct": len(vals),
         },

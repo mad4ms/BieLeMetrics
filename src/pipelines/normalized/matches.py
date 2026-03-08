@@ -1,3 +1,4 @@
+import json
 import difflib
 import logging
 from collections.abc import Iterable
@@ -47,19 +48,30 @@ def find_best_team_match(
 
 
 def extract_team_names_from_match_name(match_name: str) -> Tuple[str, str]:
-    if match_name is None or not isinstance(match_name, str):
+    if match_name is None or not isinstance(match_name, str) or not match_name.strip():
         raise ValueError("match_name must be a non-empty string")
 
     if " vs. " in match_name:
         delimiter = " vs. "
     elif " vs " in match_name:
         delimiter = " vs "
+    elif " v. " in match_name:
+        delimiter = " v. "
+    elif " v " in match_name:
+        delimiter = " v "
     else:
         raise ValueError(f"Unexpected format in description: {match_name}")
 
     name_home = match_name.split(delimiter)[0].strip()
     name_away = match_name.split(delimiter)[1].strip()
     return normalize_team_name(name_home), normalize_team_name(name_away)
+
+
+def _safe_extract_team_names(match_name: object) -> Tuple[Optional[str], Optional[str]]:
+    try:
+        return extract_team_names_from_match_name(match_name)
+    except ValueError:
+        return None, None
 
 
 COLS_TO_DROP = [
@@ -136,6 +148,9 @@ COLS_TO_DROP = [
 
 
 def _safe_next(comps, predicate, value_fn):
+    if isinstance(comps, str):
+        return None
+
     if not isinstance(comps, Iterable):
         return None
 
@@ -144,6 +159,25 @@ def _safe_next(comps, predicate, value_fn):
             return value_fn(c)
 
     return None
+
+
+def _maybe_parse_json_container(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return value
+
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return value
+
+    if isinstance(parsed, (list, dict)):
+        return parsed
+
+    return value
 
 
 def normalize_matches(
@@ -155,6 +189,14 @@ def normalize_matches(
     # do not mutate upstream
     k = df_sessions_kinexon_raw.copy()
     s = df_fixtures_sportradar_raw.copy()
+
+    if "season_schedule_item" in k.columns:
+        k["season_schedule_item"] = k["season_schedule_item"].map(
+            _maybe_parse_json_container
+        )
+
+    if "competitors" in s.columns:
+        s["competitors"] = s["competitors"].map(_maybe_parse_json_container)
 
     # fill missing description (map is slightly faster than apply here)
     missing_desc = k["description"].isna()
@@ -170,11 +212,20 @@ def normalize_matches(
 
     # extract team names (keep your exact semantics)
     k[["team_name_home_kinexon", "team_name_away_kinexon"]] = k["description"].apply(
-        lambda x: pd.Series(extract_team_names_from_match_name(x))
+        lambda x: pd.Series(_safe_extract_team_names(x))
     )
     s[["team_name_home_sportradar", "team_name_away_sportradar"]] = s[
         "nameLocal"
-    ].apply(lambda x: pd.Series(extract_team_names_from_match_name(x)))
+    ].apply(lambda x: pd.Series(_safe_extract_team_names(x)))
+
+    n_missing_kinexon_names = int(k["team_name_home_kinexon"].isna().sum())
+    n_missing_sportradar_names = int(s["team_name_home_sportradar"].isna().sum())
+    if n_missing_kinexon_names or n_missing_sportradar_names:
+        logging.warning(
+            "Could not parse team names for %d Kinexon rows and %d Sportradar rows",
+            n_missing_kinexon_names,
+            n_missing_sportradar_names,
+        )
 
     keys_k = ["team_name_home_kinexon", "team_name_away_kinexon"]
     keys_s = ["team_name_home_sportradar", "team_name_away_sportradar"]
@@ -206,6 +257,11 @@ def normalize_matches(
 
     # keep your markdown safety conversion
     merged = merged.astype("object").where(merged.notna(), None)
+
+    merged["competitors"] = merged["competitors"].map(_maybe_parse_json_container)
+    merged["season_schedule_item"] = merged["season_schedule_item"].map(
+        _maybe_parse_json_container
+    )
 
     merged["entity_id_home_sportradar"] = merged["competitors"].apply(
         lambda comps: _safe_next(
