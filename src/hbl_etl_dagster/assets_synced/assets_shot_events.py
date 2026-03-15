@@ -1,15 +1,21 @@
+from pathlib import Path
+
 import pandas as pd
 from dagster import (
     AssetCheckExecutionContext,
     AssetCheckResult,
     AssetExecutionContext,
     DynamicPartitionsDefinition,
+    Field,
     MetadataValue,
     asset,
     asset_check,
 )
 
-from src.pipelines.synced.shot_events import sync_shot_events as sync_shot_events_fn
+from src.pipelines.synced.shot_events import (
+    render_shot_event as render_shot_event_fn,
+    sync_shot_events as sync_shot_events_fn,
+)
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -19,6 +25,13 @@ fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
     compute_kind="duckdb",
     partitions_def=fixtures_partition_def,
     description="Synced shot events for a single fixture (partitioned by fixture_id).",
+    config_schema={
+        "render_debug": Field(bool, default_value=False),
+        "render_sync_panel": Field(bool, default_value=False),
+        "render_max_events": Field(int, default_value=3),
+        "render_sync_panel_width_px": Field(int, default_value=0),
+        "render_output_dir": Field(str, default_value=""),
+    },
 )
 def shot_events(
     context: AssetExecutionContext,
@@ -53,6 +66,22 @@ def shot_events(
         df_positions_normalized=match_positions_normalized,
         df_players=players,
     )
+
+    if context.op_config.get("render_debug"):
+        output_dir_val = context.op_config.get("render_output_dir") or None
+        output_dir = Path(output_dir_val) if output_dir_val else None
+        panel_width = context.op_config.get("render_sync_panel_width_px") or None
+        try:
+            render_shot_event_fn(
+                df_shot_events,
+                match_positions_normalized,
+                max_events=context.op_config.get("render_max_events", 3),
+                include_sync_panel=context.op_config.get("render_sync_panel", False),
+                sync_panel_width_px=panel_width,
+                output_dir=output_dir,
+            )
+        except Exception as exc:
+            context.log.warning("Render debug failed: %s", exc)
 
     context.log.info("Extracted %d synced shot events", len(df_shot_events))
     context.add_output_metadata(

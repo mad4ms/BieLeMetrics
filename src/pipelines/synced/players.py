@@ -118,12 +118,28 @@ def extract_players_for_match(
 
         def fuzzy_match_player(row):
             name = row["name"]
+            team_name = row.get("team_name", "") or ""
             candidates = df_positions_unique_players[
                 df_positions_unique_players["fixture_id"] == row["fixture_id"]
             ]
             if candidates.empty:
                 return pd.Series([None, None, None])
-            # Fuzzy match on full_name
+
+            # Constrain to the player's own team before name matching.
+            # Kinexon group_name and Sportradar team_name differ in casing/punctuation,
+            # so we use a loose fuzzy match (cutoff=0.4) to resolve the team first.
+            if team_name:
+                group_names = candidates["group_name"].dropna().unique().tolist()
+                team_matches = difflib.get_close_matches(
+                    team_name, group_names, n=1, cutoff=0.4
+                )
+                if team_matches:
+                    candidates = candidates[candidates["group_name"] == team_matches[0]]
+
+            if candidates.empty:
+                return pd.Series([None, None, None])
+
+            # Fuzzy match on full_name within the resolved team
             name_matches = difflib.get_close_matches(
                 name,
                 candidates["full_name"].tolist(),

@@ -9,6 +9,8 @@ from matplotlib.ticker import FuncFormatter
 
 from src.hbl_etl_dagster.utils.goal_rendering import (
     OUT_DIR,
+    POS_PAD_SEC_AFTER,
+    POS_PAD_SEC_BEFORE,
     render_goal_with_multifreeze,
 )
 
@@ -158,6 +160,44 @@ def plot_event_sync(
 # -----------------------------------------------------------------------------
 # Match goal events to detected shot events
 # -----------------------------------------------------------------------------
+def _estimate_clock_drift(
+    event_times_ms: np.ndarray,
+    signed_diffs_ms: np.ndarray,
+) -> tuple[float, float, float, float]:
+    """
+    Fit a linear model to the per-goal clock offset between Sportradar and Kinexon:
+
+        signed_diff = offset + slope * (event_time - t_ref)
+
+    where signed_diff = event_time_ms - kin_timestamp_ms (positive = Sportradar later).
+
+    Args:
+        event_times_ms:  Sportradar event timestamps (epoch ms).
+        signed_diffs_ms: Measured differences (event_ms - kin_ms).
+
+    Returns:
+        offset_ms:     Estimated fixed offset at t_ref (ms).
+        slope:         Drift rate (ms per ms, dimensionless). Multiply by 60_000 for ms/min.
+        t_ref_ms:      Reference time used for centering (mean of event_times_ms).
+        residual_std:  Std of fit residuals (ms); used to set the tight matching window.
+    """
+    t_ref = float(np.mean(event_times_ms))
+    t_centered = event_times_ms.astype(float) - t_ref
+
+    if len(event_times_ms) >= 3:
+        slope, offset = np.polyfit(t_centered, signed_diffs_ms.astype(float), deg=1)
+        residuals = signed_diffs_ms.astype(float) - (offset + slope * t_centered)
+        residual_std = float(np.std(residuals))
+    else:
+        offset = float(np.median(signed_diffs_ms))
+        slope = 0.0
+        residual_std = (
+            float(np.std(signed_diffs_ms)) if len(signed_diffs_ms) > 1 else 5_000.0
+        )
+
+    return float(offset), float(slope), t_ref, residual_std
+
+
 def _sync_goals_to_detected_shots(
     df_goals: pd.DataFrame,
     df_match_detected_shots_normalized: pd.DataFrame,
@@ -166,11 +206,17 @@ def _sync_goals_to_detected_shots(
     tol_after_ms: int,
 ) -> pd.DataFrame:
     """
-    For each goal, select the closest detected shot within [goal_ms - tol_before, goal_ms + tol_after].
+    For each goal, select the closest detected shot within a time window.
 
     Strategy:
-      1. Try to match by shooter league_id within tolerance.
-      2. If no match, fall back to closest shot by time within tolerance (ignoring player).
+      1. Pass 1 — player+time matching with wide window → collect player_time pairs.
+      2. Estimate per-fixture clock drift (offset + slope) from those pairs.
+      3. Pass 2 — full matching (player then time-only fallback) with a drift-corrected
+         search window centred on the predicted Kinexon timestamp.
+
+    The drift model (signed_diff = offset + slope * (t - t_ref)) accounts for both a
+    fixed clock offset between the two systems and a linear drift over the match.  When
+    fewer than 3 player_time pairs are available the original wide window is used as-is.
 
     Output is row-preserving for df_goals (left join semantics).
     """
@@ -186,13 +232,79 @@ def _sync_goals_to_detected_shots(
     kx["timestamp_ms"] = pd.to_numeric(kx["timestamp_ms"], errors="coerce")
     kx = kx.dropna(subset=["timestamp_ms"]).copy()
     kx["timestamp_ms"] = kx["timestamp_ms"].astype(np.int64)
-
-    # Ensure ids compare reliably
     kx["league_id"] = kx["league_id"].astype("string")
 
     goals = df_goals.copy()
     goals["person_league_id"] = goals["person_league_id"].astype("string")
 
+    # ------------------------------------------------------------------
+    # Pass 1: collect player_time pairs to estimate clock drift
+    # ------------------------------------------------------------------
+    p1_event_ms: List[int] = []
+    p1_signed_diff: List[int] = []
+
+    for _, g in goals.iterrows():
+        g_ms = g.get("event_time_ms")
+        lid = g.get("person_league_id")
+        if pd.isna(g_ms) or pd.isna(lid):
+            continue
+        lo = int(g_ms) - int(tol_before_ms)
+        hi = int(g_ms) + int(tol_after_ms)
+        cand = kx[
+            (kx["timestamp_ms"].between(lo, hi)) & (kx["league_id"] == lid)
+        ].copy()
+        if not cand.empty:
+            cand["time_diff"] = (cand["timestamp_ms"] - int(g_ms)).abs()
+            best_kin_ms = int(cand.loc[cand["time_diff"].idxmin(), "timestamp_ms"])
+            p1_event_ms.append(int(g_ms))
+            p1_signed_diff.append(int(g_ms) - best_kin_ms)
+
+    # ------------------------------------------------------------------
+    # Estimate drift model from pass-1 pairs
+    # ------------------------------------------------------------------
+    # Only apply correction when the estimate is reliable: enough pairs AND
+    # residual_std is small enough that the corrected window is tighter than
+    # the original.  High residual_std means the player_time matches are noisy
+    # or few, and a corrected window wider than the original would introduce
+    # more false positives than it removes.
+    _MIN_PAIRS_FOR_DRIFT = 5
+    _MAX_RESIDUAL_STD_MS = 5_000  # tighter than tol_before_ms / 6 ≈ 5 s
+
+    drift_available = False
+    if len(p1_event_ms) >= _MIN_PAIRS_FOR_DRIFT:
+        offset_ms, slope, t_ref_ms, residual_std = _estimate_clock_drift(
+            np.array(p1_event_ms), np.array(p1_signed_diff)
+        )
+        tight_tol_ms = max(int(3 * residual_std), 3_000)
+        if residual_std <= _MAX_RESIDUAL_STD_MS:
+            drift_available = True
+            logging.info(
+                "Clock drift correction active: offset=%.0f ms  slope=%.1f ms/min  "
+                "residual_std=%.0f ms  tight_tol=%d ms  (from %d player_time pairs)",
+                offset_ms,
+                slope * 60_000,
+                residual_std,
+                tight_tol_ms,
+                len(p1_event_ms),
+            )
+        else:
+            logging.info(
+                "Clock drift correction skipped: residual_std=%.0f ms > threshold %d ms "
+                "(from %d player_time pairs); using original window.",
+                residual_std,
+                _MAX_RESIDUAL_STD_MS,
+                len(p1_event_ms),
+            )
+    else:
+        logging.debug(
+            "Insufficient player_time pairs (%d < %d) for drift estimation; using original window.",
+            len(p1_event_ms),
+            _MIN_PAIRS_FOR_DRIFT,
+        )
+
+    # ------------------------------------------------------------------
+    # Pass 2: full matching with drift-corrected window
+    # ------------------------------------------------------------------
     rows: List[Dict[str, Any]] = []
 
     for _, g in goals.iterrows():
@@ -201,17 +313,21 @@ def _sync_goals_to_detected_shots(
         if pd.isna(g_ms):
             continue
 
-        lo = int(g_ms) - int(tol_before_ms)
-        hi = int(g_ms) + int(tol_after_ms)
+        if drift_available:
+            predicted_diff = offset_ms + slope * (int(g_ms) - t_ref_ms)
+            predicted_kin_ms = int(g_ms) - predicted_diff
+            lo = int(predicted_kin_ms) - tight_tol_ms
+            hi = int(predicted_kin_ms) + tight_tol_ms
+        else:
+            lo = int(g_ms) - int(tol_before_ms)
+            hi = int(g_ms) + int(tol_after_ms)
 
-        # Filter candidates by time window first
         cand_time = kx[kx["timestamp_ms"].between(lo, hi)].copy()
 
         best = None
         method = None
 
         if not cand_time.empty:
-            # 1. Try strict player match
             if pd.notna(lid):
                 cand_player = cand_time[cand_time["league_id"] == lid].copy()
                 if not cand_player.empty:
@@ -221,13 +337,13 @@ def _sync_goals_to_detected_shots(
                     best = cand_player.loc[cand_player["time_diff"].idxmin()]
                     method = "player_time"
 
-            # 2. Fallback to time-only match
             if best is None:
                 cand_time["time_diff"] = (cand_time["timestamp_ms"] - int(g_ms)).abs()
                 best = cand_time.loc[cand_time["time_diff"].idxmin()]
                 method = "time_only_fallback"
 
         if best is not None:
+            time_diff_ms = int(best["time_diff"])
             rows.append(
                 {
                     "goal_event_id": g["event_id"],
@@ -235,7 +351,7 @@ def _sync_goals_to_detected_shots(
                     "detected_events_shot_time": pd.to_datetime(
                         int(best["timestamp_ms"]), unit="ms", utc=True
                     ),
-                    "time_difference_ms": int(best["time_diff"]),
+                    "time_difference_ms": time_diff_ms,
                     "distance": best.get("distance"),
                     "speed_ball": best.get("speed_ball"),
                     "trajectory": best.get("trajectory"),
@@ -251,7 +367,8 @@ def _sync_goals_to_detected_shots(
                     "match_method": method,
                 }
             )
-    if rows == []:
+
+    if not rows:
         df_synced = pd.DataFrame(
             columns=[
                 "goal_event_id",
@@ -266,6 +383,7 @@ def _sync_goals_to_detected_shots(
             pd.DataFrame(rows)
             .sort_values("time_difference_ms")
             .drop_duplicates(subset=["goal_event_id"], keep="first")
+            .drop_duplicates(subset=["detected_shot_id"], keep="first")
         )
 
     if df_synced["goal_event_id"].duplicated().any():
@@ -440,12 +558,12 @@ def detect_throw_point(
     last_row = df_pb[df_pb["ts"] == last_ts].iloc[0]
     out["last_possession_idx"] = int(df_pb.index.get_indexer_for([last_row.name])[0])
 
-    # Search mask: ±50ms around each possession end timestamp
-    search_mask = pd.Series(False, index=df_pb.index)
-    for t_end in end_ts:
-        t0 = t_end - pd.Timedelta(milliseconds=50)
-        t1 = t_end + pd.Timedelta(milliseconds=50)
-        search_mask |= (df_pb["ts"] >= t0) & (df_pb["ts"] <= t1)
+    # Search mask: ±50ms around the LAST possession end only.
+    # Using the last end (closest to the detected shot) avoids picking up earlier
+    # pass or touch events in multi-possession windows (Pitfall 5 fix).
+    t0 = last_ts - pd.Timedelta(milliseconds=50)
+    t1 = last_ts + pd.Timedelta(milliseconds=50)
+    search_mask = (df_pb["ts"] >= t0) & (df_pb["ts"] <= t1)
 
     candidates = df_pb[search_mask]
     if candidates.empty:
@@ -510,6 +628,10 @@ def _refine_throw_times(
 
     pos["league_id"] = pos["league_id"].astype("string")
 
+    # Pre-extract the sorted timestamp array once so each window lookup is O(log N)
+    # instead of an O(N) boolean scan over the full positions DataFrame.
+    _pos_ts = pos["timestamp_ms"].to_numpy()
+
     out_rows: List[Dict[str, Any]] = []
     plots_left = int(debug_plot_max)
 
@@ -528,7 +650,9 @@ def _refine_throw_times(
         lo = int(seed_ms) - int(tol_before_ms)
         hi = int(seed_ms) + int(tol_after_ms)
 
-        df_scene = pos[pos["timestamp_ms"].between(lo, hi)].copy()
+        lo_idx = int(np.searchsorted(_pos_ts, lo, side="left"))
+        hi_idx = int(np.searchsorted(_pos_ts, hi, side="right"))
+        df_scene = pos.iloc[lo_idx:hi_idx].copy()
         if df_scene.empty:
             continue
 
@@ -758,15 +882,26 @@ def prepare_positions_for_sync(
 def insert_goal_position(
     df_goals: pd.DataFrame,
     df_positions: pd.DataFrame,
+    *,
+    buffer_ms: int = 120_000,
 ) -> pd.DataFrame:
     """
-    Insert goal position based on defending team and period.
+    Insert goal_position (0 or 40) inferred from the defending goalkeeper's median x-position.
+
+    Each (team, period) pair is resolved independently using goalkeeper positions
+    within ±buffer_ms of that period's goal events. This avoids the fragile
+    last-first-half-goal split used previously (Pitfall 6 fix): a team that only
+    concedes in period 2 now correctly gets a period-2 goal_position.
     """
-    # Compute goal_position per defense team and period (based on goalkeeper median x per half)
     teams = df_goals["team_name_defense"].dropna().unique().tolist()
     goal_pos_map: Dict[str, Dict[int, Optional[int]]] = {
         team: {1: None, 2: None} for team in teams
     }
+
+    # Sort positions once and cache sorted ts array for O(log N) window lookups.
+    pos = df_positions.sort_values("timestamp_ms").reset_index(drop=True)
+    _pos_ts = pos["timestamp_ms"].to_numpy()
+    _pos_lid = pos["league_id"].astype("string")
 
     for team in teams:
         gk_ids = (
@@ -778,28 +913,23 @@ def insert_goal_position(
         if len(gk_ids) == 0:
             continue
 
-        df_p1 = df_goals[
-            (df_goals["period_id"] == 1) & (df_goals["team_name_defense"] == team)
-        ]
-        if df_p1.empty:
-            continue
+        for period in [1, 2]:
+            df_period = df_goals[
+                (df_goals["period_id"] == period)
+                & (df_goals["team_name_defense"] == team)
+            ]
+            if df_period.empty:
+                continue
 
-        split_ts_ms = int(df_p1.sort_values("event_time_ms").iloc[-1]["event_time_ms"])
+            p_min = int(df_period["event_time_ms"].min())
+            p_max = int(df_period["event_time_ms"].max())
 
-        df_pos_p1 = df_positions[df_positions["timestamp_ms"] <= split_ts_ms]
-        df_pos_p2 = df_positions[df_positions["timestamp_ms"] > split_ts_ms]
-
-        # Align types for isin
-        df_pos_p1_ids = df_pos_p1["league_id"].astype("string")
-        df_pos_p2_ids = df_pos_p2["league_id"].astype("string")
-
-        df_gk_p1 = df_pos_p1[df_pos_p1_ids.isin(gk_ids)]
-        if not df_gk_p1.empty:
-            goal_pos_map[team][1] = 0 if df_gk_p1["x_m"].median() < 20 else 40
-
-        df_gk_p2 = df_pos_p2[df_pos_p2_ids.isin(gk_ids)]
-        if not df_gk_p2.empty:
-            goal_pos_map[team][2] = 0 if df_gk_p2["x_m"].median() < 20 else 40
+            lo_idx = int(np.searchsorted(_pos_ts, p_min - buffer_ms, side="left"))
+            hi_idx = int(np.searchsorted(_pos_ts, p_max + buffer_ms, side="right"))
+            gk_mask = _pos_lid.iloc[lo_idx:hi_idx].isin(gk_ids)
+            x_vals = pos["x_m"].iloc[lo_idx:hi_idx][gk_mask.to_numpy()]
+            if len(x_vals) > 0:
+                goal_pos_map[team][period] = 0 if x_vals.median() < 20 else 40
 
     df_goals["goal_position"] = df_goals.apply(
         lambda r: goal_pos_map.get(r["team_name_defense"], {}).get(r["period_id"]),
@@ -928,6 +1058,9 @@ def render_shot_event(
     throw_ts_col: str = "throw_ts",
     detected_shot_ts_col: str = "detected_events_shot_time",
     output_dir: Optional[Path] = None,
+    include_sync_panel: bool = False,
+    sync_panel_width_px: Optional[int] = None,
+    sync_panel_d_possess: float = 1.5,
 ) -> pd.DataFrame:
     if df_goals.empty:
         logging.warning("render_shot_event: df_goals is empty.")
@@ -951,6 +1084,14 @@ def render_shot_event(
         df = df.sort_values(sort_cols)
 
     df = df.head(max_events)
+
+    def _value_to_ms(value: Any) -> Optional[int]:
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, (int, np.integer)):
+            return int(value)
+        ts_val = pd.to_datetime(value, utc=True, errors="coerce")
+        return None if pd.isna(ts_val) else int(ts_val.value // 10**6)
 
     rendered_records: List[Dict[str, Any]] = []
 
@@ -994,12 +1135,64 @@ def render_shot_event(
             logging.warning("Event %s: no freeze markers, skipping.", event_id)
             continue
 
+        sync_panel = None
+        if include_sync_panel and freeze_markers:
+            valid_markers = [m for m in freeze_markers if pd.notna(m.get("ts"))]
+            if valid_markers:
+                df_positions_scene = df_positions
+                if "ts" not in df_positions_scene.columns:
+                    df_positions_scene = df_positions_scene.copy()
+                    df_positions_scene["ts"] = pd.to_datetime(
+                        df_positions_scene["timestamp_ms"], unit="ms", utc=True
+                    )
+
+                t_min = min(
+                    pd.to_datetime(m["ts"], utc=True, errors="coerce")
+                    for m in valid_markers
+                )
+                t_max = max(
+                    pd.to_datetime(m["ts"], utc=True, errors="coerce")
+                    for m in valid_markers
+                )
+                t0 = t_min - pd.Timedelta(seconds=POS_PAD_SEC_BEFORE)
+                t1 = t_max + pd.Timedelta(seconds=POS_PAD_SEC_AFTER)
+                origin_ms = int(t0.value // 10**6)
+                range_ms = int((t1 - t0).total_seconds() * 1000)
+                df_scene = df_positions_scene[
+                    (df_positions_scene["ts"] >= t0) & (df_positions_scene["ts"] <= t1)
+                ].copy()
+
+                df_pb = _build_player_ball_timeline(
+                    df_scene,
+                    row.get("person_league_id"),
+                    frame_tol_ms=0,
+                )
+                if not df_pb.empty:
+                    event_ms = _value_to_ms(row.get("event_time_ms"))
+                    if event_ms is None:
+                        event_ms = _value_to_ms(row.get(event_time_col))
+                    kin_ms = _value_to_ms(row.get(detected_shot_ts_col))
+                    throw_ms = _value_to_ms(row.get("throw_timestamp_ms"))
+                    if throw_ms is None:
+                        throw_ms = _value_to_ms(row.get(throw_ts_col))
+                    sync_panel = {
+                        "df_pb": df_pb,
+                        "event_ms": event_ms,
+                        "kin_ms": kin_ms,
+                        "throw_ms": throw_ms,
+                        "d_possess": sync_panel_d_possess,
+                        "panel_width_px": sync_panel_width_px,
+                        "origin_ms": origin_ms,
+                        "range_ms": range_ms,
+                    }
+
         out_path = render_goal_with_multifreeze(
             df_positions=df_positions,
             row_goal=row,
             freeze_markers=freeze_markers,
             out_dir=output_dir,
             show=True,
+            sync_panel=sync_panel,
         )
 
         if out_path is None:
