@@ -24,6 +24,7 @@ def _ts_to_ms(series_or_ts):
         # so dividing by 10**6 would yield seconds (wrong). Casting to ms first
         # ensures astype("int64") always returns milliseconds since epoch.
         return s.astype("datetime64[ms, UTC]").astype("int64")
+    # Timestamp.value is always nanoseconds; // 10**6 → milliseconds
     return None if pd.isna(s) else int(s.value // 10**6)
 
 
@@ -596,7 +597,7 @@ def _refine_throw_times(
             {
                 "event_id": goal.get("event_id"),
                 "throw_timestamp_ms": throw_ms,
-                "throw_ts": pd.to_datetime(throw_ms, unit="ms"),
+                "throw_ts": pd.to_datetime(throw_ms, unit="ms", utc=True),
                 "throw_acceleration": throw_acc,
                 "method": res.get("method"),
             }

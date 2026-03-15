@@ -1,3 +1,4 @@
+import difflib
 import logging
 
 import numpy as np
@@ -87,6 +88,39 @@ def calculate_xg_features(
         col for col in position_cols if col in df_positions_normalized.columns
     ]
     df_positions_view = df_positions_normalized[available_position_cols].copy()
+
+    # Remap Kinexon group_name → Sportradar team name.
+    # The two sources use different casing/punctuation (e.g. "Frisch Auf! Göppingen" vs
+    # "FRISCH AUF Göppingen"), so an exact match in the per-shot loop always fails for
+    # mismatched teams. Build a one-time fuzzy mapping using the team names that actually
+    # appear in shot_events.
+    if "group_name" in df_positions_view.columns:
+        sportradar_teams = set()
+        for col in ("team_name_offense", "team_name_defense", "team_name_home"):
+            if col in df_shot_events.columns:
+                sportradar_teams.update(df_shot_events[col].dropna().unique())
+        sportradar_teams.discard(None)
+        kinexon_groups = [
+            g
+            for g in df_positions_view["group_name"].dropna().unique()
+            if "ball" not in str(g).lower()
+        ]
+        group_name_map: dict[str, str] = {}
+        for kg in kinexon_groups:
+            matches = difflib.get_close_matches(kg, sportradar_teams, n=1, cutoff=0.5)
+            if matches:
+                group_name_map[kg] = matches[0]
+            else:
+                group_name_map[kg] = kg
+        if group_name_map:
+            df_positions_view["group_name"] = df_positions_view["group_name"].map(
+                lambda g: group_name_map.get(g, g)
+            )
+            for kg, sr in group_name_map.items():
+                if kg != sr:
+                    logging.getLogger(__name__).info(
+                        "group_name remapped: %r → %r", kg, sr
+                    )
 
     if "timestamp_ms" in df_positions_view.columns:
         df_positions_view["timestamp_ms"] = pd.to_numeric(

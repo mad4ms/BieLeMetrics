@@ -185,7 +185,7 @@ def calculate_standings(df_fixtures: pd.DataFrame) -> pd.DataFrame:
             )
 
     df_all_fixtures_in_season["start_time_utc"] = pd.to_datetime(
-        df_all_fixtures_in_season["startTimeUTC"], errors="coerce"
+        df_all_fixtures_in_season["startTimeUTC"], utc=True, errors="coerce"
     )
 
     sort_cols = ["start_time_utc"]

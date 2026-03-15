@@ -1,41 +1,38 @@
+import duckdb
 import pandas as pd
-from dagster import (
-    AssetExecutionContext,
-    TableColumn,
-    TableSchema,
-    asset,
-)
+from dagster import AssetExecutionContext, Config, TableColumn, TableSchema, asset
 from sklearn.pipeline import Pipeline
 
 from src.pipelines.ml.train_xg import train_xg_model as train_xg_model_fn
+
+
+class MlXgModelConfig(Config):
+    db_path: str = "data/hbl_raw.duckdb"
 
 
 @asset(
     io_manager_key="file_io_manager",
     group_name="ml",
     compute_kind="xgboost",
-    description="Trained xG model for a single fixture (partitioned by fixture_id).",
+    deps=["features_xg"],
+    description="xG model trained on all available fixtures.",
 )
-def ml_xg_model(
-    context: AssetExecutionContext,
-    features_xg: pd.DataFrame,
-) -> Pipeline:
+def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Pipeline:
     """
-    Train xG model for feature table.
-
-    :param context: Description
-    :type context: AssetExecutionContext
-
-    :param features_xg: Description
-    :type features_xg: pd.DataFrame
-    :return: Description
-    :rtype: object
+    Train xG model on all features_xg rows across every fixture.
+    Reads directly from DuckDB to bypass the per-partition IO manager.
     """
-    df_features_xg = features_xg.copy()
+    with duckdb.connect(config.db_path, read_only=True) as con:
+        df_features_xg = con.execute("SELECT * FROM features_xg").df()
+
+    context.log.info(
+        "Loaded %d rows from features_xg across %d fixtures",
+        len(df_features_xg),
+        df_features_xg["fixture_id"].nunique(),
+    )
 
     model, metrics, _, _ = train_xg_model_fn(df_features_xg=df_features_xg)
 
-    context.log.info("Trained xG model.")
     context.add_output_metadata(
         {
             "dagster/row_count": len(df_features_xg),
@@ -71,28 +68,3 @@ def ml_xs_model(
     :return: Trained xS model pipeline
     """
     return False
-
-    # df_features_xs = features_xs.copy()
-
-    # model, metrics = train_xs_model_fn(df_features_xs=df_features_xs)
-
-    # context.log.info("Trained xS model.")
-
-    # context.add_output_metadata(
-    #     {
-    #         "dagster/row_count": len(df_features_xs),
-    #         "dagster/column_schema": TableSchema(
-    #             columns=[
-    #                 TableColumn(
-    #                     name=col,
-    #                     type=str(df_features_xs[col].dtype),
-    #                 )
-    #                 for col in df_features_xs.columns
-    #             ]
-    #         ),
-    #         "n_unique_fixtures": df_features_xs["fixture_id"].nunique(),
-    #         **metrics,
-    #     }
-    # )
-
-    # return model

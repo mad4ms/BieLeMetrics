@@ -119,8 +119,10 @@ def fetch_session_ids_for_fixtures(
             if logger:
                 logger.info("[%s] ✖ start_time_local is NaT", fixture_id)
             continue
-        # check if in future
-        if start_local > pd.Timestamp.now(tz=start_local.tz):
+        # check if in future — compare at date level to avoid naive/aware mixing
+        # (startTimeLocal is the venue's local time, no tz info attached)
+        game_date = start_local.date()
+        if game_date > datetime.date.today():
             if logger:
                 logger.debug(
                     "[%s] ✖ fixture start_time_local %s is in the future",
@@ -128,10 +130,8 @@ def fetch_session_ids_for_fixtures(
                     start_local,
                 )
             continue
-        date_game_start = start_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_game_end = date_game_start.date() + pd.Timedelta(hours=24)
-        dt_start = datetime.datetime.fromisoformat(str(date_game_start))
-        dt_end = datetime.datetime.fromisoformat(str(date_game_end))
+        dt_start = datetime.datetime(game_date.year, game_date.month, game_date.day)
+        dt_end = dt_start + datetime.timedelta(days=1)
         if logger:
             logger.debug(
                 "Fetching sessions for team ID %s (Name: %s) at %s to %s",
@@ -146,7 +146,7 @@ def fetch_session_ids_for_fixtures(
                 logger.info(
                     "[%s] ✖ no sessions on %s for '%s'",
                     fixture_id,
-                    date_game_start.date(),
+                    game_date,
                     name_team_home,
                 )
 
@@ -183,7 +183,7 @@ def fetch_session_ids_for_fixtures(
                     "[%s] ✖ no matching session found for team '%s' on %s",
                     fixture_id,
                     name_team_home,
-                    date_game_start.date(),
+                    game_date,
                 )
 
     return session_ids
