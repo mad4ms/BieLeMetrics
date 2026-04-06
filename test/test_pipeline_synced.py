@@ -8,6 +8,7 @@ from src.pipelines.synced.players import extract_players_for_match
 from src.pipelines.synced.shot_events import (
     _sync_goals_to_detected_shots,
     normalize_time,
+    sync_shot_events,
 )
 
 SAMPLES_DIR = Path("assets/data_samples")
@@ -188,3 +189,20 @@ def test_extract_players_for_match_tolerates_missing_names() -> None:
     assert pd.isna(out.loc[0, "mapped_id"])
     assert pd.isna(out.loc[0, "league_id"])
     assert pd.isna(out.loc[0, "session_id"])
+
+
+def test_sync_shot_events_empty_goals_keeps_expected_columns() -> None:
+    out = sync_shot_events(
+        df_match_normalized=pd.DataFrame([{"fixture_id": "f1"}]),
+        df_match_events_normalized_goals=pd.DataFrame(
+            columns=["fixture_id", "event_type", "event_id"]
+        ),
+        df_match_detected_shots_normalized=pd.DataFrame(),
+        df_positions_normalized=pd.DataFrame(),
+        df_players=pd.DataFrame(),
+    )
+
+    assert out.empty
+    assert "throw_timestamp_ms" in out.columns
+    assert "detected_shot_id" in out.columns
+    assert "match_method" in out.columns

@@ -1001,6 +1001,33 @@ def sync_shot_events(
 
     if df_goals.empty:
         logging.warning("No goal events found.")
+        for column_name, default_value in {
+            "detected_shot_id": pd.NA,
+            "detected_events_shot_time": pd.NaT,
+            "time_difference_ms": pd.NA,
+            "match_method": pd.NA,
+            "distance": pd.NA,
+            "speed_ball": pd.NA,
+            "trajectory": pd.NA,
+            "shot_position_x": pd.NA,
+            "shot_position_y": pd.NA,
+            "hit_position_y": pd.NA,
+            "hit_position_z": pd.NA,
+            "sucess_kinexon": pd.NA,
+            "shot_category": pd.NA,
+            "shot_type": pd.NA,
+            "validated": pd.NA,
+            "assisting_mapped_id": pd.NA,
+            "throw_timestamp_ms": pd.NA,
+            "throw_ts": pd.NaT,
+            "throw_acceleration": pd.NA,
+            "method": pd.NA,
+            "goal_position": pd.NA,
+            "time_diff_detected_shot_throw_ms": pd.NA,
+            "time_diff_event_throw_ms": pd.NA,
+        }.items():
+            if column_name not in df_goals.columns:
+                df_goals[column_name] = default_value
         return df_goals
     else:
         logging.info("Processing %d goal events.", len(df_goals))
