@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.pipelines.normalized.match_positions import normalize_match_positions
 from src.pipelines.raw import kinexon, sportradar
 
 
@@ -36,3 +37,65 @@ def test_sportradar_get_competition_id_none(monkeypatch) -> None:
     )
     out = sportradar.get_competition_id(api=object(), competition_name="X")
     assert out is None
+
+
+def test_normalize_match_positions_applies_flensburg_home_y_offset() -> None:
+    df_raw = pd.DataFrame(
+        [
+            {
+                "ts in ms": 1,
+                "sensor id": 10,
+                "mapped id": 20,
+                "league id": "l1",
+                "group id": 1,
+                "group name": "SG Flensburg-Handewitt",
+                "x in m": 31.0,
+                "y in m": 22.5,
+                "speed in m/s": 0.0,
+                "direction of movement in deg": 0.0,
+                "acceleration in m/s2": 0.0,
+                "total distance in m": 0.0,
+                "metabolic power in W/kg": 0.0,
+                "acceleration load": 0.0,
+                "fixture_id": "f1",
+            }
+        ]
+    )
+
+    out = normalize_match_positions(
+        df_positions_kinexon_raw=df_raw,
+        home_team_name="SG Flensburg-Handewitt",
+    )
+
+    assert out.loc[0, "y_m"] == 10.0
+
+
+def test_normalize_match_positions_leaves_other_home_fixtures_unchanged() -> None:
+    df_raw = pd.DataFrame(
+        [
+            {
+                "ts in ms": 1,
+                "sensor id": 10,
+                "mapped id": 20,
+                "league id": "l1",
+                "group id": 1,
+                "group name": "THW Kiel",
+                "x in m": 31.0,
+                "y in m": 22.5,
+                "speed in m/s": 0.0,
+                "direction of movement in deg": 0.0,
+                "acceleration in m/s2": 0.0,
+                "total distance in m": 0.0,
+                "metabolic power in W/kg": 0.0,
+                "acceleration load": 0.0,
+                "fixture_id": "f1",
+            }
+        ]
+    )
+
+    out = normalize_match_positions(
+        df_positions_kinexon_raw=df_raw,
+        home_team_name="THW Kiel",
+    )
+
+    assert out.loc[0, "y_m"] == 22.5

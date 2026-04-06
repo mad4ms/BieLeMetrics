@@ -191,6 +191,45 @@ def test_extract_players_for_match_tolerates_missing_names() -> None:
     assert pd.isna(out.loc[0, "session_id"])
 
 
+def test_extract_players_for_match_empty_positions_keeps_expected_columns() -> None:
+    df_match_normalized = pd.DataFrame(
+        [
+            {
+                "fixture_id": "f1",
+                "entity_id_home": "h1",
+                "entity_id_away": "a1",
+                "team_name_home": "Home",
+                "team_name_away": "Away",
+            }
+        ]
+    )
+
+    df_match_events_normalized_setup = pd.DataFrame(
+        columns=[
+            "fixture_id",
+            "entity_id",
+            "event_type",
+            "person_id",
+            "name",
+            "bib",
+            "position",
+        ]
+    )
+
+    out = extract_players_for_match(
+        df_match_normalized=df_match_normalized,
+        df_match_events_normalized_setup=df_match_events_normalized_setup,
+        df_match_detected_shots_normalized=pd.DataFrame(),
+        df_match_positions_normalized=pd.DataFrame(),
+        df_match_players_normalized=pd.DataFrame(),
+    )
+
+    assert out.empty
+    assert "league_id" in out.columns
+    assert "mapped_id" in out.columns
+    assert "session_id" in out.columns
+
+
 def test_sync_shot_events_empty_goals_keeps_expected_columns() -> None:
     out = sync_shot_events(
         df_match_normalized=pd.DataFrame([{"fixture_id": "f1"}]),

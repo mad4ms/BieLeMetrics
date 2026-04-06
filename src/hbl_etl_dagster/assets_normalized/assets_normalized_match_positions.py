@@ -13,14 +13,6 @@ from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
-# Venue Y-offset corrections keyed by home team name (as stored in matches_normalized).
-# Value is the number of meters to subtract from y_m to bring coordinates into the
-# standard 0–20 m field frame.
-# Flensburg: Kinexon origin at their arena is shifted +12.5 m on the Y-axis.
-VENUE_Y_OFFSET_M: dict[str, float] = {
-    "SG Flensburg-Handewitt": 12.5,
-}
-
 
 @asset(
     group_name="normalized",
@@ -43,25 +35,17 @@ def match_positions_normalized(
     """
     fixture_id = context.partition_key
 
-    df_normalized = normalize_match_positions_fn(
-        df_positions_kinexon_raw=positions_kinexon_raw,
-    )
-
-    # Apply venue-specific Y offset correction for home games at known offset venues.
     fixture_meta = matches_normalized[
         matches_normalized["fixture_id"] == str(fixture_id)
     ]
+    home_team = None
     if not fixture_meta.empty:
         home_team = fixture_meta["team_name_home"].iloc[0]
-        if home_team in VENUE_Y_OFFSET_M:
-            y_shift = VENUE_Y_OFFSET_M[home_team]
-            df_normalized["y_m"] = df_normalized["y_m"] - y_shift
-            context.log.info(
-                "Applied venue Y offset correction of -%.1f m for home team '%s' (fixture %s)",
-                y_shift,
-                home_team,
-                fixture_id,
-            )
+
+    df_normalized = normalize_match_positions_fn(
+        df_positions_kinexon_raw=positions_kinexon_raw,
+        home_team_name=home_team,
+    )
 
     context.log.info("Normalized %d match positions", len(df_normalized))
     context.add_output_metadata(
