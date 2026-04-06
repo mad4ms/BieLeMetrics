@@ -174,3 +174,6 @@ artifacts/
 .claude/skills/
 .claude/settings.local.json
 .github/prompts/
+
+
+docs/transformers.md
