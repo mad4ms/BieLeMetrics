@@ -418,7 +418,7 @@ def _sync_goals_to_detected_shots(
         raise RuntimeError("Duplicate goal_event_id in detected-shot sync")
 
     time_priority_override_count = int(
-        (df_synced.get("match_method") == "time_priority_override").sum()
+        (df_synced["match_method"] == "time_priority_override").sum()
     )
     if time_priority_override_count:
         logging.info(
