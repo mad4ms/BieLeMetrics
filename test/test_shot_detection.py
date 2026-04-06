@@ -149,6 +149,32 @@ class TestSyncGoalsToDetectedShots:
         assert out["match_method"].iloc[0] == "player_time"
         assert out["detected_shot_id"].iloc[0] == "shot_1"
 
+    def test_player_time_kept_when_time_gap_is_small(self):
+        goals = pd.DataFrame(
+            {
+                "event_id": ["g1"],
+                "event_time_ms": [10_000],
+                "person_league_id": ["player_A"],
+            }
+        )
+        detected = _make_detected([9_000, 10_800], ["player_B", "player_A"])
+        out = self._sync(goals, detected, tol_before_ms=5_000, tol_after_ms=5_000)
+        assert out["match_method"].iloc[0] == "player_time"
+        assert out["detected_shot_id"].iloc[0] == "shot_1"
+
+    def test_time_priority_override_when_player_match_is_much_worse(self):
+        goals = pd.DataFrame(
+            {
+                "event_id": ["g1"],
+                "event_time_ms": [10_000],
+                "person_league_id": ["player_A"],
+            }
+        )
+        detected = _make_detected([10_050, 24_000], ["player_B", "player_A"])
+        out = self._sync(goals, detected, tol_before_ms=20_000, tol_after_ms=20_000)
+        assert out["match_method"].iloc[0] == "time_priority_override"
+        assert out["detected_shot_id"].iloc[0] == "shot_0"
+
     def test_time_only_fallback_when_no_player_match(self):
         goals = pd.DataFrame(
             {
@@ -191,6 +217,20 @@ class TestSyncGoalsToDetectedShots:
         assert matched["detected_shot_id"].nunique() == 1
         # The closer goal (g1, diff=0) wins
         assert matched["event_id"].iloc[0] == "g1"
+
+    def test_candidate_pool_recovers_second_best_shot_after_collision(self):
+        goals = pd.DataFrame(
+            {
+                "event_id": ["g1", "g2"],
+                "event_time_ms": [1_000, 1_100],
+                "person_league_id": ["p1", "p2"],
+            }
+        )
+        detected = _make_detected([1_000, 1_120], ["p1", "p2"])
+        out = self._sync(goals, detected, tol_before_ms=5_000, tol_after_ms=5_000)
+        matched = out.dropna(subset=["detected_shot_id"]).sort_values("event_id")
+        assert len(matched) == 2
+        assert matched["detected_shot_id"].tolist() == ["shot_0", "shot_1"]
 
     # --- Pitfall 1: monitoring via warning (wide window, no hard filter) ---
     def test_pitfall1_large_time_diff_still_matched_but_expected_warning(self):
@@ -245,7 +285,7 @@ class TestSyncGoalsToDetectedShots:
         )
         matched = out.dropna(subset=["detected_shot_id"])
         assert set(matched["match_method"].unique()).issubset(
-            {"player_time", "time_only_fallback"}
+            {"player_time", "time_only_fallback", "time_priority_override"}
         )
 
 

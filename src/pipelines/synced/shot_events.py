@@ -211,8 +211,9 @@ def _sync_goals_to_detected_shots(
     Strategy:
       1. Pass 1 — player+time matching with wide window → collect player_time pairs.
       2. Estimate per-fixture clock drift (offset + slope) from those pairs.
-      3. Pass 2 — full matching (player then time-only fallback) with a drift-corrected
-         search window centred on the predicted Kinexon timestamp.
+        3. Pass 2 — full matching with a hybrid rule: prefer the best player-matched
+            candidate unless another detected shot is materially closer in time to the
+            predicted Kinexon timestamp.
 
     The drift model (signed_diff = offset + slope * (t - t_ref)) accounts for both a
     fixed clock offset between the two systems and a linear drift over the match.  When
@@ -310,7 +311,9 @@ def _sync_goals_to_detected_shots(
     # ------------------------------------------------------------------
     # Pass 2: full matching with drift-corrected window
     # ------------------------------------------------------------------
-    rows: List[Dict[str, Any]] = []
+    candidate_rows: List[Dict[str, Any]] = []
+    # Require a clear temporal win before overriding the Sportradar shooter.
+    _PLAYER_MATCH_GRACE_MS = 12_000
 
     for _, g in goals.iterrows():
         g_ms = g.get("event_time_ms")
@@ -331,56 +334,61 @@ def _sync_goals_to_detected_shots(
 
         cand_time = kx[kx["timestamp_ms"].between(lo, hi)].copy()
 
-        best = None
-        method = None
-
         # When drift correction is active, rank by residual from predicted Kinexon
         # time (|ts - predicted_kin_ms|).  When no correction, rank by raw offset
         # from Sportradar time (|ts - g_ms|) — same as before.
         rank_ref_ms = int(predicted_kin_ms) if drift_available else int(g_ms)
 
         if not cand_time.empty:
+            cand_time["time_diff"] = (cand_time["timestamp_ms"] - rank_ref_ms).abs()
+            has_player_candidate = False
             if pd.notna(lid):
-                cand_player = cand_time[cand_time["league_id"] == lid].copy()
-                if not cand_player.empty:
-                    cand_player["time_diff"] = (
-                        cand_player["timestamp_ms"] - rank_ref_ms
-                    ).abs()
-                    best = cand_player.loc[cand_player["time_diff"].idxmin()]
+                has_player_candidate = bool((cand_time["league_id"] == lid).any())
+
+            for _, cand in cand_time.iterrows():
+                is_player_match = pd.notna(lid) and cand.get("league_id") == lid
+                time_diff_ms = int(cand["time_diff"])
+                effective_time_diff_ms = time_diff_ms
+                if is_player_match:
+                    effective_time_diff_ms = max(
+                        time_diff_ms - _PLAYER_MATCH_GRACE_MS,
+                        0,
+                    )
+
+                if is_player_match:
                     method = "player_time"
+                elif has_player_candidate:
+                    method = "time_priority_override"
+                else:
+                    method = "time_only_fallback"
 
-            if best is None:
-                cand_time["time_diff"] = (cand_time["timestamp_ms"] - rank_ref_ms).abs()
-                best = cand_time.loc[cand_time["time_diff"].idxmin()]
-                method = "time_only_fallback"
+                candidate_rows.append(
+                    {
+                        "goal_event_id": g["event_id"],
+                        "detected_shot_id": cand.get("id"),
+                        "detected_events_shot_time": pd.to_datetime(
+                            int(cand["timestamp_ms"]), unit="ms", utc=True
+                        ),
+                        "time_difference_ms": time_diff_ms,
+                        "effective_time_difference_ms": effective_time_diff_ms,
+                        "is_player_match": is_player_match,
+                        "distance": cand.get("distance"),
+                        "speed_ball": cand.get("speed_ball"),
+                        "trajectory": cand.get("trajectory"),
+                        "shot_position_x": cand.get("shot_position_x"),
+                        "shot_position_y": cand.get("shot_position_y"),
+                        "hit_position_y": cand.get("hit_position_y"),
+                        "hit_position_z": cand.get("hit_position_z"),
+                        "sucess_kinexon": cand.get("success"),
+                        "shot_category": cand.get("shot_category"),
+                        "shot_type": cand.get("shot_type"),
+                        "validated": cand.get("validated"),
+                        "assisting_mapped_id": cand.get("assisting_player_id"),
+                        "match_method": method,
+                    }
+                )
 
-        if best is not None:
-            time_diff_ms = int(best["time_diff"])
-            rows.append(
-                {
-                    "goal_event_id": g["event_id"],
-                    "detected_shot_id": best.get("id"),
-                    "detected_events_shot_time": pd.to_datetime(
-                        int(best["timestamp_ms"]), unit="ms", utc=True
-                    ),
-                    "time_difference_ms": time_diff_ms,
-                    "distance": best.get("distance"),
-                    "speed_ball": best.get("speed_ball"),
-                    "trajectory": best.get("trajectory"),
-                    "shot_position_x": best.get("shot_position_x"),
-                    "shot_position_y": best.get("shot_position_y"),
-                    "hit_position_y": best.get("hit_position_y"),
-                    "hit_position_z": best.get("hit_position_z"),
-                    "sucess_kinexon": best.get("success"),
-                    "shot_category": best.get("shot_category"),
-                    "shot_type": best.get("shot_type"),
-                    "validated": best.get("validated"),
-                    "assisting_mapped_id": best.get("assisting_player_id"),
-                    "match_method": method,
-                }
-            )
-
-    if not rows:
+    if not candidate_rows:
         df_synced = pd.DataFrame(
             columns=[
                 "goal_event_id",
@@ -392,14 +400,31 @@ def _sync_goals_to_detected_shots(
         )
     else:
         df_synced = (
-            pd.DataFrame(rows)
-            .sort_values("time_difference_ms")
-            .drop_duplicates(subset=["goal_event_id"], keep="first")
+            pd.DataFrame(candidate_rows)
+            .sort_values(
+                [
+                    "effective_time_difference_ms",
+                    "time_difference_ms",
+                    "is_player_match",
+                ],
+                ascending=[True, True, False],
+            )
             .drop_duplicates(subset=["detected_shot_id"], keep="first")
+            .drop_duplicates(subset=["goal_event_id"], keep="first")
+            .drop(columns=["effective_time_difference_ms", "is_player_match"])
         )
 
     if df_synced["goal_event_id"].duplicated().any():
         raise RuntimeError("Duplicate goal_event_id in detected-shot sync")
+
+    time_priority_override_count = int(
+        (df_synced.get("match_method") == "time_priority_override").sum()
+    )
+    if time_priority_override_count:
+        logging.info(
+            "Time-priority overrides applied for %d goal rows where player match was materially worse.",
+            time_priority_override_count,
+        )
 
     return goals.merge(
         df_synced, left_on="event_id", right_on="goal_event_id", how="left"

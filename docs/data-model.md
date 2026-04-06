@@ -130,6 +130,7 @@ normalized relational tables instead (one row per atomic observation).
 
 The `match_method` column indicates sync quality:
 - `"player_time"` — matched on player identity + time (high confidence)
+- `"time_priority_override"` — a player-matched shot existed, but a different detected shot was materially closer in time to the predicted Kinexon timestamp
 - `"time_only_fallback"` — matched on time alone (lower confidence; monitor this rate)
 
 The `throw_timestamp_ms` column is the refined release timestamp derived from
