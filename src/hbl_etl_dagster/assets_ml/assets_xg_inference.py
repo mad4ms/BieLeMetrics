@@ -8,8 +8,9 @@ from dagster import (
     TableSchema,
     asset,
 )
-from sklearn.pipeline import Pipeline
+from typing import Any
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.ml.infer_xg import infer_xg, summarize_fixture_xg
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
@@ -24,7 +25,7 @@ fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 )
 def xg_predictions(
     context: AssetExecutionContext,
-    ml_xg_model: Pipeline,
+    ml_xg_model: Any,
     features_xg: pd.DataFrame,
 ) -> pd.DataFrame:
     """
@@ -59,7 +60,7 @@ def xg_predictions(
         "fixture_id": context.partition_key,
         "xg_sum": float(df_pred["xg"].sum()),
         "xg_mean": float(df_pred["xg"].mean()),
-        "preview": MetadataValue.md(df_pred.head(20).to_markdown(index=False)),
+        "preview": MetadataValue.md(markdown_table(df_pred, n=20)),
     }
     context.add_output_metadata(md)
     return df_pred
@@ -86,7 +87,7 @@ def xg_fixture_summary(
         {
             "dagster/row_count": len(df_sum),
             "fixture_id": context.partition_key,
-            "preview": MetadataValue.md(df_sum.to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_sum, n=None)),
         }
     )
     return df_sum

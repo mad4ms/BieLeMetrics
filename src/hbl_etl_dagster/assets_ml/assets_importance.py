@@ -1,9 +1,10 @@
 from pathlib import Path
+from typing import Any
 
 import duckdb
 from dagster import AssetExecutionContext, Config, MetadataValue, asset
-from sklearn.pipeline import Pipeline
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.ml.importance_xg import materialize_feature_importance_artifacts
 
 
@@ -19,7 +20,7 @@ class XgFeatureImportanceConfig(Config):
 def xg_feature_importance(
     context: AssetExecutionContext,
     config: XgFeatureImportanceConfig,
-    ml_xg_model: Pipeline,
+    ml_xg_model: Any,
 ) -> object:
     """
     Produces:
@@ -73,10 +74,10 @@ def xg_feature_importance(
             "perm_table": MetadataValue.path(artifacts.perm_table_path),
             "gain_table": MetadataValue.path(artifacts.xgb_table_path),
             "perm_top10": MetadataValue.md(
-                artifacts.perm_importance.head(10).to_markdown(index=False)
+                markdown_table(artifacts.perm_importance, n=10)
             ),
             "gain_top10": MetadataValue.md(
-                artifacts.xgb_gain_importance.head(10).to_markdown(index=False)
+                markdown_table(artifacts.xgb_gain_importance, n=10)
             ),
         }
     )

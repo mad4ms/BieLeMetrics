@@ -6,6 +6,42 @@ import pandas as pd
 
 GOAL_WIDTH = 3.0
 HALF_GOAL = GOAL_WIDTH / 2.0
+FRAME_TOLERANCE_MS = 150
+FEATURE_COLUMNS = [
+    "fixture_id",
+    "event_id",
+    "avg_offense_distance_to_goal",
+    "avg_defense_distance_to_goal",
+    "shooter_distance_to_goal",
+    "shooter_distance_to_goalkeeper",
+    "goalkeeper_distance_to_goal",
+    "ball_distance_to_goal",
+    "ball_distance_to_goalkeeper",
+    "shot_angle_to_goal",
+    "ball_angle_to_goal",
+    "angle_ball_to_goalkeeper",
+    "num_defenders_close",
+    "closest_defender_distance",
+    "shooter_lateral_offset",
+    "attack_type",
+    "sub_type",
+    "is_home_team",
+    "attendance",
+    "shooter_to_goal_dx",
+    "shooter_to_goal_dy",
+    "shooter_y_signed",
+    "shooter_distance_to_goal_sq",
+    "gk_lateral_offset",
+    "gk_angle_from_shooter",
+    "gk_along_shotline_dist",
+    "n_defenders_in_shot_cone",
+    "min_defender_dist_to_shotline",
+    "min_defender_along_shotline",
+    "defense_centroid_dist_to_goal",
+    "defense_spread",
+    "target",
+]
+STRING_FEATURE_COLUMNS = {"fixture_id", "event_id", "attack_type", "sub_type"}
 
 
 def shot_angle_to_goal(
@@ -54,17 +90,73 @@ def projection_along_ray(px, py, ax, ay, bx, by) -> float:
 
 
 def _positions_for_timestamp(
-    positions_by_timestamp: pd.DataFrame, timestamp_ms: object
+    positions_by_timestamp: pd.DataFrame,
+    available_timestamps: np.ndarray,
+    timestamp_ms: object,
+    frame_tolerance_ms: int = FRAME_TOLERANCE_MS,
 ) -> pd.DataFrame:
+    if positions_by_timestamp.empty or pd.isna(timestamp_ms):
+        return positions_by_timestamp.iloc[0:0].copy()
+
     try:
         df_positions_shot = positions_by_timestamp.loc[timestamp_ms]
     except KeyError:
-        return positions_by_timestamp.iloc[0:0].copy()
+        if len(available_timestamps) == 0:
+            return positions_by_timestamp.iloc[0:0].copy()
+
+        target_timestamp = float(timestamp_ms)
+        insert_idx = int(np.searchsorted(available_timestamps, target_timestamp))
+
+        nearest_timestamp = None
+        nearest_delta = None
+        for candidate_idx in (insert_idx - 1, insert_idx):
+            if candidate_idx < 0 or candidate_idx >= len(available_timestamps):
+                continue
+            candidate_timestamp = float(available_timestamps[candidate_idx])
+            candidate_delta = abs(candidate_timestamp - target_timestamp)
+            if nearest_delta is None or candidate_delta < nearest_delta:
+                nearest_timestamp = candidate_timestamp
+                nearest_delta = candidate_delta
+
+        if nearest_delta is None or nearest_delta > frame_tolerance_ms:
+            return positions_by_timestamp.iloc[0:0].copy()
+
+        df_positions_shot = positions_by_timestamp.loc[nearest_timestamp]
 
     if isinstance(df_positions_shot, pd.Series):
         return df_positions_shot.to_frame().T
 
     return df_positions_shot
+
+
+def _build_group_name_map(
+    df_positions_view: pd.DataFrame,
+    df_shot_events: pd.DataFrame,
+) -> dict[str, str]:
+    if "group_name" not in df_positions_view.columns:
+        return {}
+
+    sportradar_teams: set[str] = set()
+    for col in ("team_name_offense", "team_name_defense", "team_name_home"):
+        if col in df_shot_events.columns:
+            sportradar_teams.update(
+                value for value in df_shot_events[col].tolist() if pd.notna(value)
+            )
+    sportradar_teams.discard(None)
+
+    kinexon_groups = [
+        group_name
+        for group_name in dict.fromkeys(df_positions_view["group_name"].tolist())
+        if pd.notna(group_name) and "ball" not in str(group_name).lower()
+    ]
+    group_name_map: dict[str, str] = {}
+    for kg in kinexon_groups:
+        matches = difflib.get_close_matches(kg, sportradar_teams, n=1, cutoff=0.5)
+        if matches:
+            group_name_map[kg] = matches[0]
+        else:
+            group_name_map[kg] = kg
+    return group_name_map
 
 
 def calculate_xg_features(
@@ -73,6 +165,7 @@ def calculate_xg_features(
     df_positions_normalized: pd.DataFrame,
     goal_y: float = 10.0,
     cone_half_angle_deg: float = 20.0,
+    frame_tolerance_ms: int = FRAME_TOLERANCE_MS,
 ) -> pd.DataFrame:
     """
     Adds obstruction + GK coverage + defensive compactness features.
@@ -95,23 +188,7 @@ def calculate_xg_features(
     # mismatched teams. Build a one-time fuzzy mapping using the team names that actually
     # appear in shot_events.
     if "group_name" in df_positions_view.columns:
-        sportradar_teams = set()
-        for col in ("team_name_offense", "team_name_defense", "team_name_home"):
-            if col in df_shot_events.columns:
-                sportradar_teams.update(df_shot_events[col].dropna().unique())
-        sportradar_teams.discard(None)
-        kinexon_groups = [
-            g
-            for g in df_positions_view["group_name"].dropna().unique()
-            if "ball" not in str(g).lower()
-        ]
-        group_name_map: dict[str, str] = {}
-        for kg in kinexon_groups:
-            matches = difflib.get_close_matches(kg, sportradar_teams, n=1, cutoff=0.5)
-            if matches:
-                group_name_map[kg] = matches[0]
-            else:
-                group_name_map[kg] = kg
+        group_name_map = _build_group_name_map(df_positions_view, df_shot_events)
         if group_name_map:
             df_positions_view["group_name"] = df_positions_view["group_name"].map(
                 lambda g: group_name_map.get(g, g)
@@ -127,8 +204,19 @@ def calculate_xg_features(
             df_positions_view["timestamp_ms"], errors="coerce"
         )
         positions_by_timestamp = df_positions_view.set_index("timestamp_ms", drop=False)
+        available_timestamps = np.array(
+            sorted(
+                {
+                    float(timestamp)
+                    for timestamp in df_positions_view["timestamp_ms"].tolist()
+                    if pd.notna(timestamp)
+                }
+            ),
+            dtype=float,
+        )
     else:
         positions_by_timestamp = df_positions_view
+        available_timestamps = np.array([], dtype=float)
 
     features_list = []
     for _, shot in df_shot_events.iterrows():
@@ -142,7 +230,10 @@ def calculate_xg_features(
 
         # positions at timestamp
         df_positions_shot = _positions_for_timestamp(
-            positions_by_timestamp, timestamp_ms
+            positions_by_timestamp,
+            available_timestamps,
+            timestamp_ms,
+            frame_tolerance_ms=frame_tolerance_ms,
         )
         df_offense = df_positions_shot[
             df_positions_shot["group_name"] == team_name_offense
@@ -412,7 +503,17 @@ def calculate_xg_features(
             }
         )
 
-    df_features = pd.DataFrame(features_list)
+    if features_list:
+        df_features = pd.DataFrame(features_list)
+    else:
+        df_features = pd.DataFrame(
+            {
+                column: pd.Series(
+                    dtype="object" if column in STRING_FEATURE_COLUMNS else "float64"
+                )
+                for column in FEATURE_COLUMNS
+            }
+        )
 
     # Ensure numeric dtype for all numeric cols (safe cast)
     for c in df_features.columns:

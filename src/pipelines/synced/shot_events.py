@@ -240,6 +240,11 @@ def _sync_goals_to_detected_shots(
     # ------------------------------------------------------------------
     # Pass 1: collect player_time pairs to estimate clock drift
     # ------------------------------------------------------------------
+    # Use a symmetric wide window so that reversed-offset fixtures (Kinexon
+    # clock ahead of Sportradar by up to ~30 s) still yield player_time pairs
+    # for drift estimation.  The tight matching window is derived from residuals
+    # later, so using a wide bootstrap here does not reduce precision in pass 2.
+    _BOOTSTRAP_TOL_MS = 35_000
     p1_event_ms: List[int] = []
     p1_signed_diff: List[int] = []
 
@@ -248,8 +253,8 @@ def _sync_goals_to_detected_shots(
         lid = g.get("person_league_id")
         if pd.isna(g_ms) or pd.isna(lid):
             continue
-        lo = int(g_ms) - int(tol_before_ms)
-        hi = int(g_ms) + int(tol_after_ms)
+        lo = int(g_ms) - _BOOTSTRAP_TOL_MS
+        hi = int(g_ms) + _BOOTSTRAP_TOL_MS
         cand = kx[
             (kx["timestamp_ms"].between(lo, hi)) & (kx["league_id"] == lid)
         ].copy()
@@ -319,26 +324,33 @@ def _sync_goals_to_detected_shots(
             lo = int(predicted_kin_ms) - tight_tol_ms
             hi = int(predicted_kin_ms) + tight_tol_ms
         else:
-            lo = int(g_ms) - int(tol_before_ms)
-            hi = int(g_ms) + int(tol_after_ms)
+            # No drift model: fall back to the same symmetric wide window used
+            # in pass 1 so that reversed-offset fixtures are not silently missed.
+            lo = int(g_ms) - _BOOTSTRAP_TOL_MS
+            hi = int(g_ms) + _BOOTSTRAP_TOL_MS
 
         cand_time = kx[kx["timestamp_ms"].between(lo, hi)].copy()
 
         best = None
         method = None
 
+        # When drift correction is active, rank by residual from predicted Kinexon
+        # time (|ts - predicted_kin_ms|).  When no correction, rank by raw offset
+        # from Sportradar time (|ts - g_ms|) — same as before.
+        rank_ref_ms = int(predicted_kin_ms) if drift_available else int(g_ms)
+
         if not cand_time.empty:
             if pd.notna(lid):
                 cand_player = cand_time[cand_time["league_id"] == lid].copy()
                 if not cand_player.empty:
                     cand_player["time_diff"] = (
-                        cand_player["timestamp_ms"] - int(g_ms)
+                        cand_player["timestamp_ms"] - rank_ref_ms
                     ).abs()
                     best = cand_player.loc[cand_player["time_diff"].idxmin()]
                     method = "player_time"
 
             if best is None:
-                cand_time["time_diff"] = (cand_time["timestamp_ms"] - int(g_ms)).abs()
+                cand_time["time_diff"] = (cand_time["timestamp_ms"] - rank_ref_ms).abs()
                 best = cand_time.loc[cand_time["time_diff"].idxmin()]
                 method = "time_only_fallback"
 

@@ -9,6 +9,7 @@ from dagster import (
     asset_check,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.synced.players import (
     extract_players_for_match as extract_players_for_match_fn,
 )
@@ -66,9 +67,7 @@ def players(
             )
             * 100,
             "n_columns": df_players_in_events.shape[1],
-            "preview": MetadataValue.md(
-                df_players_in_events.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(markdown_table(df_players_in_events, n=100)),
         }
     )
 

@@ -6,6 +6,7 @@ from dagster import (
     asset,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.features.calc_xs_features import (
     calculate_xs_features as calculate_xs_features_fn,
 )
@@ -57,9 +58,7 @@ def features_xs(
         {
             "n_rows": len(df_xs_features),
             "n_columns": df_xs_features.shape[1],
-            "preview": MetadataValue.md(
-                df_xs_features.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(markdown_table(df_xs_features, n=100)),
         }
     )
 

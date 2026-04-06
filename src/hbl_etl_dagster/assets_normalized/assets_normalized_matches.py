@@ -5,6 +5,7 @@ from dagster import (
     asset,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.normalized.matches import normalize_matches as normalize_matches_fn
 
 
@@ -31,7 +32,7 @@ def matches_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview": MetadataValue.md(df_normalized.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_normalized, n=5)),
         }
     )
 

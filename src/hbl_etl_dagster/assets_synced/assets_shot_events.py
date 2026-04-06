@@ -12,6 +12,7 @@ from dagster import (
     asset_check,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.synced.shot_events import (
     render_shot_event as render_shot_event_fn,
     sync_shot_events as sync_shot_events_fn,
@@ -90,9 +91,7 @@ def shot_events(
             "n_unique_shot_events": df_shot_events["event_id"].nunique(),
             "n_unique_throw_timestamps": df_shot_events["throw_timestamp_ms"].nunique(),
             "n_columns": df_shot_events.shape[1],
-            "preview": MetadataValue.md(
-                df_shot_events.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(markdown_table(df_shot_events, n=100)),
         }
     )
     return df_shot_events

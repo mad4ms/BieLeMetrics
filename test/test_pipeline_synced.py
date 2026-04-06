@@ -129,3 +129,62 @@ def test_extract_players_for_match_pipeline_minimal_contract() -> None:
     assert {"fixture_id", "entity_id", "person_id", "team_name", "league_id"}.issubset(
         out.columns
     )
+
+
+def test_extract_players_for_match_tolerates_missing_names() -> None:
+    df_match_normalized = pd.DataFrame(
+        [
+            {
+                "fixture_id": "f1",
+                "entity_id_home": "h1",
+                "entity_id_away": "a1",
+                "team_name_home": "Home",
+                "team_name_away": "Away",
+            }
+        ]
+    )
+
+    df_match_events_normalized_setup = pd.DataFrame(
+        [
+            {
+                "fixture_id": "f1",
+                "entity_id": "h1",
+                "event_type": "person",
+                "person_id": "p1",
+                "name": pd.NA,
+                "bib": 7,
+                "position": "LB",
+            }
+        ]
+    )
+
+    df_match_positions_normalized = pd.DataFrame(
+        [
+            {
+                "fixture_id": "f1",
+                "mapped_id": "m1",
+                "league_id": "l1",
+                "session_id": "s1",
+                "full_name": pd.NA,
+                "group_name": "Home",
+            }
+        ]
+    )
+
+    df_match_players_normalized = pd.DataFrame(
+        [{"fixture_id": "f1", "person_id": "p1", "height": 190}]
+    )
+
+    out = extract_players_for_match(
+        df_match_normalized=df_match_normalized,
+        df_match_events_normalized_setup=df_match_events_normalized_setup,
+        df_match_detected_shots_normalized=pd.DataFrame(),
+        df_match_positions_normalized=df_match_positions_normalized,
+        df_match_players_normalized=df_match_players_normalized,
+    )
+
+    assert len(out) == 1
+    assert out.loc[0, "person_id"] == "p1"
+    assert pd.isna(out.loc[0, "mapped_id"])
+    assert pd.isna(out.loc[0, "league_id"])
+    assert pd.isna(out.loc[0, "session_id"])

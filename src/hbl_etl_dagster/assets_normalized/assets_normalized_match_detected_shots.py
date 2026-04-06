@@ -11,6 +11,7 @@ from dagster import (
 from src.pipelines.normalized.match_detected_shots import (
     normalize_match_detected_shots as normalize_match_detected_shots_fn,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -41,7 +42,7 @@ def match_detected_shots_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview": MetadataValue.md(df_normalized.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_normalized, n=5)),
         }
     )
 

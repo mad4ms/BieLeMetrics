@@ -1,9 +1,16 @@
+import json
+from pathlib import Path
+from typing import Any
+
 import duckdb
+import joblib
 import pandas as pd
 from dagster import AssetExecutionContext, Config, TableColumn, TableSchema, asset
-from sklearn.pipeline import Pipeline
 
 from src.pipelines.ml.train_xg import train_xg_model as train_xg_model_fn
+
+MODEL_PATH = Path("data/models/xg_context.joblib")
+MODEL_METADATA_PATH = Path("data/models/xg_context_metadata.json")
 
 
 class MlXgModelConfig(Config):
@@ -17,7 +24,7 @@ class MlXgModelConfig(Config):
     deps=["features_xg"],
     description="xG model trained on all available fixtures.",
 )
-def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Pipeline:
+def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Any:
     """
     Train xG model on all features_xg rows across every fixture.
     Reads directly from DuckDB to bypass the per-partition IO manager.
@@ -32,6 +39,18 @@ def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Pipe
     )
 
     model, metrics, _, _ = train_xg_model_fn(df_features_xg=df_features_xg)
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, MODEL_PATH)
+
+    training_metadata = dict(getattr(model, "_bielemetrics_training_metadata", {}))
+    training_metadata["artifact_path"] = str(MODEL_PATH)
+    training_metadata["db_path"] = config.db_path
+    training_metadata["metrics"] = metrics
+    MODEL_METADATA_PATH.write_text(
+        json.dumps(training_metadata, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    context.log.info("Persisted xG model to %s", MODEL_PATH)
 
     context.add_output_metadata(
         {
@@ -43,6 +62,8 @@ def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Pipe
                 ]
             ),
             "n_unique_fixtures": df_features_xg["fixture_id"].nunique(),
+            "model_path": str(MODEL_PATH),
+            "model_metadata_path": str(MODEL_METADATA_PATH),
             **metrics,
         }
     )
@@ -59,7 +80,7 @@ def ml_xg_model(context: AssetExecutionContext, config: MlXgModelConfig) -> Pipe
 def ml_xs_model(
     context: AssetExecutionContext,
     features_xs: pd.DataFrame,
-) -> Pipeline:
+) -> Any:
     """
     Train xS model for goalkeeper-centric feature table.
 

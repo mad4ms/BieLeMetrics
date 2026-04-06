@@ -12,7 +12,7 @@ from dagster import (
     asset_check,
 )
 
-from src.hbl_etl_dagster.utils.metadata import preview_metadata
+from src.hbl_etl_dagster.utils.metadata import markdown_table, preview_metadata
 from src.pipelines.raw.sportradar import get_competition_id as sr_get_competition_id
 from src.pipelines.raw.sportradar import (
     get_fixtures_for_season as sr_get_fixtures_for_season,
@@ -141,7 +141,7 @@ def fixtures_sportradar_raw(
         {
             "n_rows": len(df),
             "n_columns": df.shape[1],
-            "preview": MetadataValue.md(df.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df, n=5)),
         }
     )
     return df

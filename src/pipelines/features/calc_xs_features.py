@@ -48,7 +48,7 @@ def calculate_xs_features(
 
     # Remap Kinexon group_name → Sportradar team name (same fix as calc_xg_features).
     if "group_name" in df_positions_view.columns:
-        sportradar_teams = set()
+        sportradar_teams: set[str] = set()
         for col in ("team_name_offense", "team_name_defense", "team_name_home"):
             if col in df_shot_events.columns:
                 sportradar_teams.update(df_shot_events[col].dropna().unique())

@@ -21,6 +21,7 @@ from src.pipelines.raw.kinexon import (
 from src.pipelines.raw.kinexon import (
     get_positions_for_session as kinexon_get_positions_for_session,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 
 @asset(
@@ -80,7 +81,7 @@ def positions_kinexon_raw(
                             "n_columns": existing_positions.shape[1],
                             "source": "duckdb_existing_partition",
                             "preview": MetadataValue.md(
-                                existing_positions.head().to_markdown(index=False)
+                                markdown_table(existing_positions, n=5)
                             ),
                         }
                     )
@@ -124,7 +125,7 @@ def positions_kinexon_raw(
             "fixture_id": str(fixture_id),
             "n_columns": df_positions.shape[1],
             "source": "kinexon_api",
-            "preview": MetadataValue.md(df_positions.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_positions, n=5)),
         }
     )
 
@@ -183,7 +184,7 @@ def detected_events_kinexon_raw(
             "dagster/row_count": len(df_events),
             "fixture_id": str(fixture_id),
             "n_columns": df_events.shape[1],
-            "preview": MetadataValue.md(df_events.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_events, n=5)),
         }
     )
     return df_events
@@ -219,7 +220,7 @@ def check_positions_kinexon_raw_notna(
                     metadata={"failed": "positions_kinexon_raw table missing"},
                 )
 
-            n_total, n_x_notna, n_y_notna = con.execute(
+            counts_row = con.execute(
                 """
                 SELECT
                     COUNT(*) AS n_total,
@@ -230,6 +231,14 @@ def check_positions_kinexon_raw_notna(
                 """,
                 [str(fixture_id)],
             ).fetchone()
+
+    if counts_row is None:
+        return AssetCheckResult(
+            passed=False,
+            metadata={"failed": "positions_kinexon_raw count query returned no rows"},
+        )
+
+    n_total, n_x_notna, n_y_notna = counts_row
 
     if n_total == 0:
         return AssetCheckResult(

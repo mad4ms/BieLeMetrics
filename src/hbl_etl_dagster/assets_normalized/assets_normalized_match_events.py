@@ -15,6 +15,7 @@ from src.pipelines.normalized.match_events import (
 from src.pipelines.normalized.match_events import (
     normalize_match_events_setup as normalize_match_events_setup_fn,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -45,13 +46,12 @@ def match_events_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview_setup": MetadataValue.md(
-                df_normalized.head().to_markdown(index=False)
-            ),
+            "preview_setup": MetadataValue.md(markdown_table(df_normalized, n=5)),
             "preview_goals": MetadataValue.md(
-                df_normalized[df_normalized["event_type"] == "goal"]
-                .head()
-                .to_markdown(index=False)
+                markdown_table(
+                    df_normalized[df_normalized["event_type"] == "goal"],
+                    n=5,
+                )
             ),
         }
     )
@@ -85,7 +85,7 @@ def match_events_normalized_setup(
         {
             "n_rows": len(df_setup),
             "n_columns": df_setup.shape[1],
-            "preview": MetadataValue.md(df_setup.head(100).to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_setup, n=100)),
         }
     )
 
@@ -118,7 +118,7 @@ def match_events_normalized_goals(
         {
             "n_rows": len(df_goals),
             "n_columns": df_goals.shape[1],
-            "preview": MetadataValue.md(df_goals.head(100).to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_goals, n=100)),
         }
     )
 
