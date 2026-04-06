@@ -16,7 +16,7 @@ This note reviews the active goal-to-shot sync pipeline in `src/pipelines/synced
 ## Matching Heuristics
 
 - Goal-to-shot matching uses a fixed asymmetric window of `-30_000 ms` to `+3_000 ms` around the Sportradar goal time.
-- Preferred match: same `person_league_id` and closest time, `match_method = "player_time"`.
+- Preferred match: same `person_league_id` and closest time, unless another detected shot is materially closer to the predicted Kinexon timestamp. Such overrides are marked as `match_method = "time_priority_override"`.
 - Fallback match: closest time only, `match_method = "time_only_fallback"`.
 - Matching is one-to-one on both `goal_event_id` and `detected_shot_id` (both deduplicated, smallest time_diff wins).
 - Throw-point detection uses possession defined as `dist_pb <= 1.5` and chooses the max `ball_acc` within ±50 ms of the **last** possession-end in the window.
