@@ -12,7 +12,7 @@ def fetch_teams_for_season(
 
     Args:
         api (HandballAPI): An instance of the HandballAPI.
-        season_id (str): The ID of the season. Default is "2024-25".
+        season_year (str): The year of the season. Default is "2024-25".
 
     Returns:
         List[Dict]: A dictionary of team IDs and names for the specified season.
@@ -20,7 +20,7 @@ def fetch_teams_for_season(
 
     logging.info("Fetching team IDs for season year %s", season_year)
     try:
-        list_teams = api.fetch_team_ids(season_year)
+        list_teams = api.get_team_ids(season_year)
         logging.info(
             "Fetched %d team IDs for season year %s",
             len(list_teams),

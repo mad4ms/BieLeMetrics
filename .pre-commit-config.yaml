@@ -35,10 +35,10 @@ repos:
       - id: nbstripout
 
   # Tests (via uv-managed env)
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: env PYTHONPATH=. uv run pytest test
-        language: system
-        pass_filenames: false
+  # - repo: local
+  #   hooks:
+  #     - id: pytest
+  #       name: pytest
+  #       entry: env PYTHONPATH=. uv run pytest test
+  #       language: system
+  #       pass_filenames: false

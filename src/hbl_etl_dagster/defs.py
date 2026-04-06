@@ -1,9 +1,10 @@
 from dagster import AssetSelection, Definitions, FilesystemIOManager, define_asset_job
 
 from .assets_features.features_xg import features_xg
-from .assets_features.features_xs import features_xs
+
+# from .assets_features.features_xs import features_xs
 from .assets_ml.assets_importance import xg_feature_importance
-from .assets_ml.assets_ml import ml_xg_model, ml_xs_model
+from .assets_ml.assets_ml import ml_xg_model  # , ml_xs_model
 from .assets_normalized.assets_normalized_match_detected_shots import (
     check_match_detected_shots_normalized,
     match_detected_shots_normalized,
@@ -99,12 +100,18 @@ fixture_raw_backfill_job = define_asset_job(
         players,
         shot_events,
         features_xg,
-        ml_xg_model,
-        features_xs,
-        ml_xs_model,
-        xg_feature_importance,
+        # features_xs,
+        # ml_xs_model,
     ),
     partitions_def=fixtures_partition_def,
+)
+
+xg_training_job = define_asset_job(
+    name="xg_training_job",
+    selection=AssetSelection.assets(
+        ml_xg_model,
+        xg_feature_importance,
+    ),
 )
 
 defs = Definitions(
@@ -130,8 +137,8 @@ defs = Definitions(
         shot_events,
         features_xg,
         ml_xg_model,
-        features_xs,
-        ml_xs_model,
+        # features_xs,
+        # ml_xs_model,
         xg_feature_importance,
     ],
     asset_checks=[
@@ -151,6 +158,7 @@ defs = Definitions(
     jobs=[
         season_raw_refresh_job,
         fixture_raw_backfill_job,
+        xg_training_job,
     ],
     resources={
         "io_manager": duckdb_io_manager.configured({"db_path": "data/hbl_raw.duckdb"}),

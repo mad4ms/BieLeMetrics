@@ -10,6 +10,17 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 
+def _get_pipeline_like_model(model: object) -> Pipeline | None:
+    if isinstance(model, Pipeline):
+        return model
+
+    main_model = getattr(model, "main_model", None)
+    if isinstance(main_model, Pipeline):
+        return main_model
+
+    return None
+
+
 def _required_columns_from_preprocessor(pre: ColumnTransformer) -> set[str]:
     """
     Derive the required input columns from a fitted ColumnTransformer.
@@ -43,7 +54,7 @@ def _required_columns_from_preprocessor(pre: ColumnTransformer) -> set[str]:
 
 
 def infer_xg(
-    model: Pipeline,
+    model: object,
     df_features_xg: pd.DataFrame,
     proba_col: str = "xg",
     keep_input_cols: bool = True,
@@ -59,8 +70,8 @@ def infer_xg(
     if df_features_xg is None or df_features_xg.empty:
         return pd.DataFrame()
 
-    if not isinstance(model, Pipeline):
-        raise TypeError(f"Expected sklearn Pipeline, got {type(model)}")
+    if not hasattr(model, "predict_proba"):
+        raise TypeError(f"Expected xG model with predict_proba(), got {type(model)}")
 
     df = df_features_xg.copy()
 
@@ -70,10 +81,15 @@ def infer_xg(
         y_true = df["target"].copy()
 
     # Validate required columns
-    if "preprocess" in model.named_steps and isinstance(
-        model.named_steps["preprocess"], ColumnTransformer
+    pipeline_model = _get_pipeline_like_model(model)
+    if (
+        pipeline_model is not None
+        and "preprocess" in pipeline_model.named_steps
+        and isinstance(pipeline_model.named_steps["preprocess"], ColumnTransformer)
     ):
-        required = _required_columns_from_preprocessor(model.named_steps["preprocess"])
+        required = _required_columns_from_preprocessor(
+            pipeline_model.named_steps["preprocess"]
+        )
         missing = sorted([c for c in required if c not in df.columns])
         if missing:
             raise ValueError(

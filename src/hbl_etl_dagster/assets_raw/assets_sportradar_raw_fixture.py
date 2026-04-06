@@ -9,6 +9,7 @@ from dagster import (
     asset_check,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.raw.sportradar import get_fixture_events as sr_get_fixture_events
 from src.pipelines.raw.sportradar import (
     get_players_for_fixture as sr_get_players_for_fixture,
@@ -51,9 +52,9 @@ def fixture_events_sportradar_raw(
             "fixture_id": str(fixture_id),
             "n_rows": len(df),
             "n_columns": df.shape[1],
-            "preview_setup": MetadataValue.md(df.head().to_markdown(index=False)),
+            "preview_setup": MetadataValue.md(markdown_table(df, n=5)),
             "preview_goals": MetadataValue.md(
-                df[df["eventType"] == "goal"].head(100).to_markdown(index=False)
+                markdown_table(df[df["eventType"] == "goal"], n=100)
             ),
         }
     )
@@ -69,7 +70,7 @@ def fixture_events_sportradar_raw(
         ):
             nested_cols.append(c)
 
-    context.log.info("Nested cols: %s", nested_cols)
+    context.log.debug("Nested cols: %s", nested_cols)
 
     return df
 
@@ -115,7 +116,7 @@ def players_sportradar_raw(
             "fixture_id": str(fixture_id),
             "n_rows": len(df_players),
             "n_columns": df_players.shape[1],
-            "preview": MetadataValue.md(df_players.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_players, n=5)),
         }
     )
     return df_players
@@ -206,16 +207,24 @@ def players_fixture_id_matches_events_when_present(
     if players_sportradar_raw.empty:
         return AssetCheckResult(passed=True, metadata={"skipped": "no rows"})
 
-    if "fixtureId" not in players_sportradar_raw.columns:
+    fixture_col = None
+    if "fixture_id" in players_sportradar_raw.columns:
+        fixture_col = "fixture_id"
+    elif "fixtureId" in players_sportradar_raw.columns:
+        fixture_col = "fixtureId"
+
+    if fixture_col is None:
         return AssetCheckResult(
-            passed=True, metadata={"skipped": "fixtureId column missing"}
+            passed=True,
+            metadata={"skipped": "fixture_id/fixtureId column missing"},
         )
 
-    vals = players_sportradar_raw["fixtureId"].dropna().astype(str).unique().tolist()
+    vals = players_sportradar_raw[fixture_col].dropna().astype(str).unique().tolist()
     ok = len(vals) <= 1
     return AssetCheckResult(
         passed=bool(ok),
         metadata={
+            "fixture_column": fixture_col,
             "distinct_fixtureId_values": vals[:10],
             "n_distinct": len(vals),
         },

@@ -6,6 +6,7 @@ from dagster import (
     asset,
 )
 
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 from src.pipelines.raw.kinexon import (
     get_sessions_for_team as kinexon_get_sessions_for_team,
 )
@@ -42,7 +43,7 @@ def teams_kinexon_raw(
         {
             "n_rows": len(df_teams),
             "n_columns": df_teams.shape[1],
-            "preview": MetadataValue.md(df_teams.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_teams, n=5)),
         }
     )
 
@@ -62,8 +63,8 @@ def sessions_kinexon_raw(
 ) -> pd.DataFrame:
     api = context.resources.kinexon_api
 
-    date_start = fixtures_sportradar_raw["startTimeLocal"].min()
-    date_end = fixtures_sportradar_raw["startTimeLocal"].max()
+    date_start = pd.to_datetime(fixtures_sportradar_raw["startTimeLocal"].min())
+    date_end = pd.to_datetime(fixtures_sportradar_raw["startTimeLocal"].max())
 
     df_sessions = pd.DataFrame()
     for team_id in teams_kinexon_raw["id"]:
@@ -82,7 +83,7 @@ def sessions_kinexon_raw(
         {
             "n_rows": len(df_sessions),
             "n_columns": df_sessions.shape[1],
-            "preview": MetadataValue.md(df_sessions.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_sessions, n=5)),
         }
     )
 

@@ -80,8 +80,16 @@ The goal of BieLeMetrics is to provide a seamless and automated pipeline to:
     PASSWORD_KINEXON_MAIN=""
     # Kinexon API Key
     API_KEY_KINEXON=""
-    # Sportradar API Key
-    API_KEY_SPORTRADAR=""
+   # Sportradar API Base URL (must include http/https)
+   BASE_URL=""
+   # Sportradar Auth URL (must include http/https)
+   AUTH_URL=""
+   # Sportradar OAuth Client ID
+   CLIENT_ID=""
+   # Sportradar OAuth Client Secret
+   CLIENT_SECRET=""
+   # Sportradar Client Organization ID
+   CLIENT_ORGANIZATION_ID=""
     # Nextcloud Storage Endpoint
     ENDPOINT_STORAGE_NEXTCLOUD=""
     # Nextcloud Storage Username (optional)

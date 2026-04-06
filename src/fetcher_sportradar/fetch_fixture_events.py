@@ -14,9 +14,7 @@ def fetch_events_for_fixture(api, fixture_id: str) -> list:
     Fetch match events for a single fixture ID.
     """
     logging.debug("Fetching events for fixture ID %s", fixture_id)
-    match_events = api.get_fixture_events_by_id(
-        fixture_id, setup_only=False, with_scores=True
-    )
+    match_events = api.get_match_events(fixture_id, setup_only=False, with_scores=True)
     if not match_events:
         logging.warning("No events found for fixture ID %s", fixture_id)
         return []

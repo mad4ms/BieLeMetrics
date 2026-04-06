@@ -1,6 +1,7 @@
-import os
-
 import pandas as pd
+import duckdb
+from filelock import FileLock
+from pathlib import Path
 from dagster import (
     AssetCheckExecutionContext,
     AssetCheckResult,
@@ -20,14 +21,11 @@ from src.pipelines.raw.kinexon import (
 from src.pipelines.raw.kinexon import (
     get_positions_for_session as kinexon_get_positions_for_session,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 
-# kinexon_get_positions_for_session
 @asset(
-    required_resource_keys={
-        "kinexon_api",
-        "io_manager",
-    },
+    required_resource_keys={"kinexon_api"},
     group_name="kinexon_raw",
     compute_kind="duckdb",
     description="Raw Kinexon positioning data for a single fixture (partitioned by fixture_id).",
@@ -37,12 +35,60 @@ def positions_kinexon_raw(
     context: AssetExecutionContext,
     matches_normalized: pd.DataFrame,
 ) -> pd.DataFrame:
-    api = context.resources.kinexon_api
-    api.connect()
     fixture_id = context.partition_key
-
     if not fixture_id:
         raise Failure(description="Missing partition_key (fixture_id).")
+
+    db_path = Path("data/hbl_raw.duckdb").resolve()
+    lock = FileLock(str(db_path.with_suffix(db_path.suffix + ".lock")))
+
+    with lock:
+        with duckdb.connect(str(db_path)) as con:
+            table_exists = con.execute(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'positions_kinexon_raw'
+                """
+            ).fetchone()
+
+            if table_exists:
+                existing_positions = con.execute(
+                    """
+                    SELECT *
+                    FROM positions_kinexon_raw
+                    WHERE fixture_id = ?
+                    """,
+                    [str(fixture_id)],
+                ).fetch_df()
+
+                if not existing_positions.empty:
+                    context.log.info(
+                        "Reusing %d existing positioning rows for fixture_id=%s.",
+                        len(existing_positions),
+                        fixture_id,
+                    )
+                    context.add_output_metadata(
+                        {
+                            "dagster/column_schema": TableSchema(
+                                columns=[
+                                    TableColumn(name=col, type=str(dtype))
+                                    for col, dtype in existing_positions.dtypes.items()
+                                ]
+                            ),
+                            "dagster/row_count": len(existing_positions),
+                            "fixture_id": str(fixture_id),
+                            "n_columns": existing_positions.shape[1],
+                            "source": "duckdb_existing_partition",
+                            "preview": MetadataValue.md(
+                                markdown_table(existing_positions, n=5)
+                            ),
+                        }
+                    )
+                    return existing_positions
+
+    api = context.resources.kinexon_api
+    api.connect()
 
     df_match = matches_normalized[
         matches_normalized["fixture_id"] == str(fixture_id)
@@ -52,58 +98,13 @@ def positions_kinexon_raw(
         context.log.warning("No session IDs found for fixture_id=%s", fixture_id)
         return pd.DataFrame()
 
-    # There can only be one session_id in df_match
     if "session_id" not in df_match.columns:
         df_match["session_id"] = df_match["id"]
 
-    session_id = df_match.iloc[0]["session_id"]
-    # to int
-    session_id = int(session_id)
-
-    duckdb_io_manager = context.resources.io_manager
-
-    # check if session_id already present in table
-    with duckdb_io_manager._conn() as con:
-        # does table exist?
-        table_exists = (
-            con.execute(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'positions_kinexon_raw'"
-            ).fetchone()[0]
-            == 1
-        )
-        if table_exists:
-            existing_sessions = con.execute(
-                "SELECT DISTINCT session_id FROM positions_kinexon_raw"
-            ).fetchall()
-            existing_session_ids = {row[0] for row in existing_sessions}
-        else:
-            existing_session_ids = set()
-    if session_id in existing_session_ids:
-        # read existing data from DuckDB
-        with duckdb_io_manager._conn() as con:
-            df_positions = con.execute(
-                f"""
-                SELECT *
-                FROM positions_kinexon_raw
-                WHERE session_id = {session_id}
-                """
-            ).df()
-
-    else:
-        # check if file in format kinexon_positions_{session_id}.0.parquet.gzip exists
-        if os.path.exists(
-            f"data/positions/kinexon_positions_{session_id}.0.parquet.gzip"
-        ):
-            df_positions = pd.read_parquet(
-                f"data/positions/kinexon_positions_{session_id}.0.parquet.gzip"
-            )
-        else:
-            df_positions = kinexon_get_positions_for_session(
-                api=api, session_id=session_id
-            )
-    # insert fixture_id column for partitioning
+    session_id = int(df_match.iloc[0]["session_id"])
+    df_positions = kinexon_get_positions_for_session(api=api, session_id=session_id)
     df_positions["fixture_id"] = str(fixture_id)
-    # and remove "fixtureId" column if exists
+
     if "fixtureId" in df_positions.columns:
         df_positions = df_positions.drop(columns=["fixtureId"])
 
@@ -123,7 +124,8 @@ def positions_kinexon_raw(
             "dagster/row_count": len(df_positions),
             "fixture_id": str(fixture_id),
             "n_columns": df_positions.shape[1],
-            "preview": MetadataValue.md(df_positions.head().to_markdown(index=False)),
+            "source": "kinexon_api",
+            "preview": MetadataValue.md(markdown_table(df_positions, n=5)),
         }
     )
 
@@ -182,7 +184,7 @@ def detected_events_kinexon_raw(
             "dagster/row_count": len(df_events),
             "fixture_id": str(fixture_id),
             "n_columns": df_events.shape[1],
-            "preview": MetadataValue.md(df_events.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_events, n=5)),
         }
     )
     return df_events
@@ -192,31 +194,69 @@ def detected_events_kinexon_raw(
 def check_positions_kinexon_raw_notna(
     context: AssetCheckExecutionContext,
 ) -> AssetCheckResult:
-    partition_key = context.run.tags["dagster/partition"]
-    df_match_position = context.resources.io_manager.load_partitioned_input(
-        table_name="positions_kinexon_raw",
-        partition_col="fixture_id",
-        partition_key=partition_key,
-    )
+    fixture_id = getattr(context, "partition_key", None)
+    if not fixture_id:
+        return AssetCheckResult(
+            passed=True,
+            metadata={"skipped": "no partition_key available for asset check"},
+        )
 
-    # check if length is not zero, fail check if zero
-    if df_match_position.empty:
-        return AssetCheckResult(passed=False, metadata={"failed": "no rows"})
+    db_path = Path("data/hbl_raw.duckdb").resolve()
+    lock = FileLock(str(db_path.with_suffix(db_path.suffix + ".lock")))
 
-    # check if > 90% of x in m and y in m columns are not null
-    required_columns = ["x in m", "y in m"]
-    for col in required_columns:
-        if col not in df_match_position.columns:
-            return AssetCheckResult(
-                passed=False, metadata={"failed": f"{col} column missing"}
-            )
-        n_notna = df_match_position[col].notna().sum()
-        n_total = len(df_match_position)
-        if n_total == 0 or (n_notna / n_total) < 0.9:
+    with lock:
+        with duckdb.connect(str(db_path)) as con:
+            table_exists = con.execute(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'positions_kinexon_raw'
+                """
+            ).fetchone()
+
+            if not table_exists:
+                return AssetCheckResult(
+                    passed=False,
+                    metadata={"failed": "positions_kinexon_raw table missing"},
+                )
+
+            counts_row = con.execute(
+                """
+                SELECT
+                    COUNT(*) AS n_total,
+                    COUNT("x in m") AS n_x_notna,
+                    COUNT("y in m") AS n_y_notna
+                FROM positions_kinexon_raw
+                WHERE fixture_id = ?
+                """,
+                [str(fixture_id)],
+            ).fetchone()
+
+    if counts_row is None:
+        return AssetCheckResult(
+            passed=False,
+            metadata={"failed": "positions_kinexon_raw count query returned no rows"},
+        )
+
+    n_total, n_x_notna, n_y_notna = counts_row
+
+    if n_total == 0:
+        return AssetCheckResult(
+            passed=False,
+            metadata={"failed": "no rows", "fixture_id": str(fixture_id)},
+        )
+
+    required_columns = {
+        "x in m": int(n_x_notna),
+        "y in m": int(n_y_notna),
+    }
+    for col, n_notna in required_columns.items():
+        if (n_notna / n_total) < 0.9:
             return AssetCheckResult(
                 passed=False,
                 metadata={
-                    "failed": f"{col} has less than 90% non-null values ({n_notna}/{n_total})"
+                    "failed": f"{col} has less than 90% non-null values ({n_notna}/{n_total})",
+                    "fixture_id": str(fixture_id),
                 },
             )
 
@@ -224,7 +264,8 @@ def check_positions_kinexon_raw_notna(
         passed=True,
         metadata={
             "checked_columns": ["x in m", "y in m"],
-            "n_rows": len(df_match_position),
+            "n_rows": int(n_total),
+            "fixture_id": str(fixture_id),
         },
     )
 

@@ -8,6 +8,7 @@ translation of the notebook's configuration cells.
 import datetime
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 import duckdb
 from dotenv import load_dotenv
@@ -26,6 +27,26 @@ os.makedirs(PATH_TO_OUTPUT, exist_ok=True)
 date = datetime.date.today().strftime("%Y-%m-%d")
 
 
+def _get_required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise ValueError(f"Missing required environment variable: {name}")
+    return value.strip()
+
+
+def _validate_http_url(name: str, value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(
+            f"Environment variable {name} must be a valid absolute http(s) URL, got: {value!r}"
+        )
+    return value
+
+
+def _get_required_http_url(name: str) -> str:
+    return _validate_http_url(name, _get_required_env(name))
+
+
 def get_duckdb_connection(db_path: Optional[str] = None):
     """Return a DuckDB connection using the same relative path as the notebook.
 
@@ -42,11 +63,11 @@ def get_api_sportradar():
     Matches the notebook's HandballAPI initialisation.
     """
     api = HandballAPI(
-        base_url=os.getenv("BASE_URL", ""),
-        auth_url=os.getenv("AUTH_URL", ""),
-        client_id=os.getenv("CLIENT_ID", ""),
-        client_secret=os.getenv("CLIENT_SECRET", ""),
-        org_id=os.getenv("CLIENT_ORGANIZATION_ID"),
+        base_url=_get_required_http_url("BASE_URL"),
+        auth_url=_get_required_http_url("AUTH_URL"),
+        client_id=_get_required_env("CLIENT_ID"),
+        client_secret=_get_required_env("CLIENT_SECRET"),
+        org_id=_get_required_env("CLIENT_ORGANIZATION_ID"),
         scopes=["read:organization"],
         sport="handball",
     )
@@ -60,23 +81,24 @@ def get_api_kinexon():
     """
     from kinexon_handball_api.handball import HandballAPI
 
+    endpoint_session = _get_required_http_url("ENDPOINT_KINEXON_SESSION")
+    endpoint_main = _get_required_http_url("ENDPOINT_KINEXON_MAIN")
+    endpoint_api_raw = os.getenv("ENDPOINT_KINEXON_API")
+    endpoint_api = (
+        _validate_http_url("ENDPOINT_KINEXON_API", endpoint_api_raw.strip())
+        if endpoint_api_raw and endpoint_api_raw.strip()
+        else endpoint_main
+    )
+
     api = HandballAPI(
-        base_url=os.getenv(
-            "ENDPOINT_KINEXON_SESSION", "https://hbl-cloud.kinexon.com/api"
-        ),
-        api_key=os.getenv("API_KEY_KINEXON", "your_api_key_here"),
-        username_basic=os.getenv("USERNAME_KINEXON_SESSION", "your_username_here"),
-        password_basic=os.getenv("PASSWORD_KINEXON_SESSION", "your_password_here"),
-        username_main=os.getenv("USERNAME_KINEXON_MAIN", "your_username_here"),
-        password_main=os.getenv("PASSWORD_KINEXON_MAIN", "your_password_here"),
-        endpoint_session=os.getenv(
-            "ENDPOINT_KINEXON_SESSION",
-            "https://hbl-cloud.kinexon.com/api/session",
-        ),
-        endpoint_main=os.getenv(
-            "ENDPOINT_KINEXON_MAIN",
-            "https://hbl-cloud.kinexon.com/api",
-        ),
+        base_url=endpoint_api,
+        api_key=_get_required_env("API_KEY_KINEXON"),
+        username_basic=_get_required_env("USERNAME_KINEXON_SESSION"),
+        password_basic=_get_required_env("PASSWORD_KINEXON_SESSION"),
+        username_main=_get_required_env("USERNAME_KINEXON_MAIN"),
+        password_main=_get_required_env("PASSWORD_KINEXON_MAIN"),
+        endpoint_session=endpoint_session,
+        endpoint_main=endpoint_main,
         timeout=10000,
     )
     return api

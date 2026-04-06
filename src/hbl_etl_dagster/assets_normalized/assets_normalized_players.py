@@ -9,6 +9,7 @@ from dagster import (
 from src.pipelines.normalized.match_players import (
     normalize_match_players as normalize_match_players_fn,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -30,9 +31,7 @@ def match_players_normalized(
             "n_rows": len(df_normalized_players),
             "n_unique_players": df_normalized_players["person_id"].nunique(),
             "n_columns": df_normalized_players.shape[1],
-            "preview": MetadataValue.md(
-                df_normalized_players.head(100).to_markdown(index=False)
-            ),
+            "preview": MetadataValue.md(markdown_table(df_normalized_players, n=100)),
         }
     )
     return df_normalized_players

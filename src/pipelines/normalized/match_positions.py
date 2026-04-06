@@ -14,8 +14,6 @@ def normalize_match_positions(
     Returns:
         pd.DataFrame: Normalized match positions DataFrame.
     """
-    df_positions = df_positions_kinexon_raw.copy()
-
     dict_cols_to_keep = {
         "ts in ms": "timestamp_ms",
         "formatted local time": "formatted_local_time",
@@ -35,9 +33,41 @@ def normalize_match_positions(
         "metabolic power in W/kg": "metabolic_power",
         "acceleration load": "acceleration_load",
     }
+
+    passthrough_cols = ["fixture_id"]
+    source_cols = [
+        col
+        for col in dict_cols_to_keep.keys()
+        if col in df_positions_kinexon_raw.columns
+    ]
+    extra_cols = [
+        col for col in passthrough_cols if col in df_positions_kinexon_raw.columns
+    ]
+
+    df_positions = df_positions_kinexon_raw[source_cols + extra_cols].copy()
     df_positions = df_positions.rename(columns=dict_cols_to_keep)
-    # drop unnamed_17
-    df_positions = df_positions.drop(columns=["Unnamed: 17"], errors="ignore")
+
+    numeric_int_cols = ["timestamp_ms"]
+    numeric_float_cols = [
+        "x_m",
+        "y_m",
+        "speed_m_s",
+        "direction",
+        "acceleration",
+        "total_distance",
+        "metabolic_power",
+        "acceleration_load",
+    ]
+
+    for col in numeric_int_cols:
+        if col in df_positions.columns:
+            df_positions[col] = pd.to_numeric(df_positions[col], errors="coerce")
+
+    for col in numeric_float_cols:
+        if col in df_positions.columns:
+            df_positions[col] = pd.to_numeric(
+                df_positions[col], errors="coerce", downcast="float"
+            )
 
     logging.info("Normalized %d positions", len(df_positions))
 

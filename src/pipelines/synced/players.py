@@ -3,6 +3,12 @@ import difflib
 import pandas as pd
 
 
+def _normalize_match_text(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
 def extract_players_for_match(
     df_match_normalized: pd.DataFrame,
     df_match_events_normalized_setup: pd.DataFrame,
@@ -117,23 +123,60 @@ def extract_players_for_match(
         ].drop_duplicates()
 
         def fuzzy_match_player(row):
-            name = row["name"]
+            name = _normalize_match_text(row.get("name", ""))
+            team_name = _normalize_match_text(row.get("team_name", ""))
             candidates = df_positions_unique_players[
                 df_positions_unique_players["fixture_id"] == row["fixture_id"]
             ]
+            if candidates.empty or not name:
+                return pd.Series([None, None, None])
+
+            # Constrain to the player's own team before name matching.
+            # Kinexon group_name and Sportradar team_name differ in casing/punctuation,
+            # so we use a loose fuzzy match (cutoff=0.4) to resolve the team first.
+            if team_name:
+                group_names = [
+                    group_name
+                    for group_name in candidates["group_name"]
+                    .map(_normalize_match_text)
+                    .unique()
+                    .tolist()
+                    if group_name
+                ]
+                team_matches = difflib.get_close_matches(
+                    team_name, group_names, n=1, cutoff=0.4
+                )
+                if team_matches:
+                    normalized_group_names = candidates["group_name"].map(
+                        _normalize_match_text
+                    )
+                    candidates = candidates[normalized_group_names == team_matches[0]]
+
             if candidates.empty:
                 return pd.Series([None, None, None])
-            # Fuzzy match on full_name
+
+            # Fuzzy match on full_name within the resolved team
+            full_names = [
+                full_name
+                for full_name in candidates["full_name"]
+                .map(_normalize_match_text)
+                .tolist()
+                if full_name
+            ]
+            if not full_names:
+                return pd.Series([None, None, None])
+
             name_matches = difflib.get_close_matches(
                 name,
-                candidates["full_name"].tolist(),
+                full_names,
                 n=1,
                 cutoff=0.8,
             )
             if not name_matches:
                 return pd.Series([None, None, None])
             matched_name = name_matches[0]
-            matched_row = candidates[candidates["full_name"] == matched_name].iloc[0]
+            normalized_full_names = candidates["full_name"].map(_normalize_match_text)
+            matched_row = candidates[normalized_full_names == matched_name].iloc[0]
             return pd.Series(
                 [
                     matched_row["mapped_id"],

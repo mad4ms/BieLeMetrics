@@ -1,9 +1,24 @@
 # features_xs.py
+import difflib
 import logging
 from typing import List
 
 import numpy as np
 import pandas as pd
+
+
+def _positions_for_timestamp(
+    positions_by_timestamp: pd.DataFrame, timestamp_ms: object
+) -> pd.DataFrame:
+    try:
+        df_positions_shot = positions_by_timestamp.loc[timestamp_ms]
+    except KeyError:
+        return positions_by_timestamp.iloc[0:0].copy()
+
+    if isinstance(df_positions_shot, pd.Series):
+        return df_positions_shot.to_frame().T
+
+    return df_positions_shot
 
 
 def calculate_xs_features(
@@ -25,6 +40,48 @@ def calculate_xs_features(
     dropped_no_ball = 0
     dropped_no_gk = 0
 
+    position_cols = ["timestamp_ms", "group_name", "league_id", "x_m", "y_m"]
+    available_position_cols = [
+        col for col in position_cols if col in df_positions_normalized.columns
+    ]
+    df_positions_view = df_positions_normalized[available_position_cols].copy()
+
+    # Remap Kinexon group_name → Sportradar team name (same fix as calc_xg_features).
+    if "group_name" in df_positions_view.columns:
+        sportradar_teams: set[str] = set()
+        for col in ("team_name_offense", "team_name_defense", "team_name_home"):
+            if col in df_shot_events.columns:
+                sportradar_teams.update(df_shot_events[col].dropna().unique())
+        sportradar_teams.discard(None)
+        kinexon_groups = [
+            g
+            for g in df_positions_view["group_name"].dropna().unique()
+            if "ball" not in str(g).lower()
+        ]
+        group_name_map: dict[str, str] = {}
+        for kg in kinexon_groups:
+            matches = difflib.get_close_matches(
+                kg, list(sportradar_teams), n=1, cutoff=0.5
+            )
+            group_name_map[kg] = matches[0] if matches else kg
+        if group_name_map:
+            df_positions_view["group_name"] = df_positions_view["group_name"].map(
+                lambda g: group_name_map.get(g, g)
+            )
+            for kg, sr in group_name_map.items():
+                if kg != sr:
+                    logging.getLogger(__name__).info(
+                        "group_name remapped: %r → %r", kg, sr
+                    )
+
+    if "timestamp_ms" in df_positions_view.columns:
+        df_positions_view["timestamp_ms"] = pd.to_numeric(
+            df_positions_view["timestamp_ms"], errors="coerce"
+        )
+        positions_by_timestamp = df_positions_view.set_index("timestamp_ms", drop=False)
+    else:
+        positions_by_timestamp = df_positions_view
+
     for _, shot in df_shot_events.iterrows():
         # --- xS only defined for on-target shots ---
         if shot.get("on_target") is False:
@@ -35,9 +92,7 @@ def calculate_xs_features(
         event_id = shot["event_id"]
 
         # --- snapshot positions at shot time ---
-        df_pos = df_positions_normalized[
-            df_positions_normalized["timestamp_ms"] == timestamp_ms
-        ]
+        df_pos = _positions_for_timestamp(positions_by_timestamp, timestamp_ms)
 
         if df_pos.empty:
             dropped_no_ball += 1

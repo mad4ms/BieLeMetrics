@@ -7,6 +7,7 @@ try:
     import cv2
 except Exception:  # pragma: no cover - optional dependency for rendering
     cv2 = None
+import numpy as np
 import pandas as pd
 
 FIELD_IMAGE: Path = Path("assets/handballfeld.png")
@@ -25,6 +26,7 @@ def render_goal_with_multifreeze(
     out_dir: Optional[Path] = None,
     fps: Optional[int] = None,
     show: bool = False,
+    sync_panel: Optional[Dict[str, Any]] = None,
 ) -> Optional[Path]:
     """
     Render a goal clip and freeze at multiple marker times.
@@ -64,8 +66,12 @@ def render_goal_with_multifreeze(
             df_positions["timestamp_ms"], unit="ms", utc=True
         )
 
-    t_min = min(pd.to_datetime(m["ts"]) for m in valid_markers)
-    t_max = max(pd.to_datetime(m["ts"]) for m in valid_markers)
+    t_min = min(
+        pd.to_datetime(m["ts"], utc=True, errors="coerce") for m in valid_markers
+    )
+    t_max = max(
+        pd.to_datetime(m["ts"], utc=True, errors="coerce") for m in valid_markers
+    )
     t0 = t_min - pd.Timedelta(seconds=POS_PAD_SEC_BEFORE)
     t1 = t_max + pd.Timedelta(seconds=POS_PAD_SEC_AFTER)
 
@@ -93,11 +99,145 @@ def render_goal_with_multifreeze(
     out_path = out_dir / f"{name_event}.mp4"
     out_path_img = out_dir / f"{name_event}.png"
 
+    def _ts_to_ms(series_or_ts: Any) -> Optional[pd.Series | int]:
+        s = pd.to_datetime(series_or_ts, utc=True, errors="coerce")
+        if isinstance(s, pd.Series):
+            return s.astype("datetime64[ms, UTC]").astype("int64")
+        return None if pd.isna(s) else int(s.value // 10**6)
+
+    def _init_sync_panel(
+        panel_data: Dict[str, Any],
+        *,
+        panel_height_px: int,
+    ) -> Optional[Dict[str, Any]]:
+        df_pb = panel_data.get("df_pb")
+        if df_pb is None or df_pb.empty:
+            return None
+
+        df_pb = df_pb.copy()
+        if "timestamp_ms" not in df_pb.columns:
+            df_pb["timestamp_ms"] = _ts_to_ms(df_pb.get("ts"))
+        df_pb["timestamp_ms"] = pd.to_numeric(df_pb["timestamp_ms"], errors="coerce")
+        df_pb = df_pb.dropna(subset=["timestamp_ms"]).copy()
+        if df_pb.empty:
+            return None
+
+        x_ms_abs = df_pb["timestamp_ms"].astype(np.int64).to_numpy()
+        origin_ms = int(panel_data.get("origin_ms") or x_ms_abs[0])
+        range_ms = panel_data.get("range_ms")
+        x_ms = x_ms_abs - origin_ms
+        acc = df_pb.get("ball_acc", pd.Series([np.nan] * len(df_pb))).to_numpy(
+            dtype=float
+        )
+        dist = df_pb.get("dist_pb", pd.Series([np.nan] * len(df_pb))).to_numpy(
+            dtype=float
+        )
+        speed = df_pb.get("ball_speed", pd.Series([np.nan] * len(df_pb))).to_numpy(
+            dtype=float
+        )
+
+        panel_width_px = panel_data.get("panel_width_px")
+        if not isinstance(panel_width_px, int) or panel_width_px <= 0:
+            panel_width_px = int(panel_height_px * 1.2)
+
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+        from matplotlib.figure import Figure
+
+        dpi = 100
+        fig = Figure(
+            figsize=(panel_width_px / dpi, panel_height_px / dpi),
+            dpi=dpi,
+        )
+        canvas = FigureCanvas(fig)
+        axA = fig.add_subplot(111)
+        axA.plot(x_ms, acc, lw=1.4, label="Ball acc")
+        axA.axhline(0, lw=0.8, color="0.7")
+        axA.set_xlabel("Time (ms from window start)")
+        axA.set_ylabel("Ball acc (m/s^2)")
+
+        axD = axA.twinx()
+        axD.plot(x_ms, dist, ls="--", lw=1.2, label="Player-ball dist")
+        if np.isfinite(speed).any():
+            axD.plot(x_ms, speed, ls=":", lw=0.9, alpha=0.6, label="Ball speed")
+        axD.set_ylabel("Distance / Speed")
+
+        d_possess = panel_data.get("d_possess")
+        if d_possess is not None:
+            poss_mask = dist <= float(d_possess)
+            if poss_mask.any():
+                ymax = np.nanmax(dist) if np.isfinite(dist).any() else 1.0
+                axD.fill_between(
+                    x_ms,
+                    0,
+                    ymax,
+                    where=poss_mask,
+                    alpha=0.18,
+                    color="#6aa84f",
+                    label="Possession",
+                )
+
+        markers = [
+            (panel_data.get("event_ms"), "SR event", "tab:blue"),
+            (panel_data.get("kin_ms"), "Detected shot", "tab:orange"),
+            (panel_data.get("throw_ms"), "Throw / release", "tab:red"),
+        ]
+        for ms, label, color in markers:
+            if ms is None:
+                continue
+            axA.axvline(ms - origin_ms, color=color, ls=":", lw=1.1, label=label)
+
+        if isinstance(range_ms, (int, float)) and range_ms > 0:
+            axA.set_xlim(0, range_ms)
+
+        time_line = axA.axvline(0, color="#d62728", lw=2.0, alpha=0.9)
+
+        lines, labels = axA.get_legend_handles_labels()
+        r_lines, r_labels = axD.get_legend_handles_labels()
+        axA.legend(lines + r_lines, labels + r_labels, loc="upper right", frameon=False)
+        axA.grid(True, alpha=0.2)
+        fig.tight_layout()
+
+        return {
+            "canvas": canvas,
+            "figure": fig,
+            "time_line": time_line,
+            "origin_ms": origin_ms,
+            "range_ms": range_ms,
+            "width": panel_width_px,
+            "height": panel_height_px,
+        }
+
+    def _render_sync_panel(
+        state: Dict[str, Any],
+        *,
+        ts_ms: int,
+    ) -> np.ndarray:
+        rel_ms = ts_ms - state.get("origin_ms", 0)
+        range_ms = state.get("range_ms")
+        if isinstance(range_ms, (int, float)) and range_ms > 0:
+            rel_ms = min(max(rel_ms, 0), range_ms)
+        state["time_line"].set_xdata([rel_ms, rel_ms])
+        canvas = state["canvas"]
+        canvas.draw()
+        buf = np.asarray(canvas.buffer_rgba())
+        return cv2.cvtColor(buf, cv2.COLOR_RGBA2BGR)
+
+    panel_state = None
+    if sync_panel:
+        try:
+            panel_state = _init_sync_panel(sync_panel, panel_height_px=height)
+        except Exception as exc:
+            print(f"⚠️ Sync panel init failed: {exc}")
+            panel_state = None
+
+    output_width = width + (panel_state["width"] if panel_state else 0)
+    output_height = max(height, panel_state["height"]) if panel_state else height
+
     writer = cv2.VideoWriter(
         str(out_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
         fps,
-        (width, height),
+        (output_width, output_height),
     )
 
     for m in valid_markers:
@@ -285,6 +425,31 @@ def render_goal_with_multifreeze(
         draw_overlay(img_draw, ts)
 
         ts_ms = int(ts.value // 10**6)
+        panel_frame = (
+            _render_sync_panel(panel_state, ts_ms=ts_ms) if panel_state else None
+        )
+        if panel_frame is not None:
+            if img_draw.shape[0] != output_height:
+                img_draw = cv2.copyMakeBorder(
+                    img_draw,
+                    0,
+                    output_height - img_draw.shape[0],
+                    0,
+                    0,
+                    cv2.BORDER_CONSTANT,
+                )
+            if panel_frame.shape[0] != output_height:
+                panel_frame = cv2.copyMakeBorder(
+                    panel_frame,
+                    0,
+                    output_height - panel_frame.shape[0],
+                    0,
+                    0,
+                    cv2.BORDER_CONSTANT,
+                )
+            frame_out = np.hstack([img_draw, panel_frame])
+        else:
+            frame_out = img_draw
         any_frozen = False
         for m in valid_markers:
             if m["done"]:
@@ -310,29 +475,29 @@ def render_goal_with_multifreeze(
                 )
 
                 if not first_png_saved:
-                    cv2.imwrite(str(out_path_img), img_draw)
+                    cv2.imwrite(str(out_path_img), frame_out)
                     first_png_saved = True
 
                 for _ in range(m["frames"]):
                     if show:
-                        cv2.imshow("Render", img_draw)
+                        cv2.imshow("Render", frame_out)
                         cv2.waitKey(10)
-                    writer.write(cv2.resize(img_draw, (width, height)))
+                    writer.write(frame_out)
                 m["done"] = True
                 any_frozen = True
         if any_frozen:
             continue
 
         if not first_png_saved:
-            cv2.imwrite(str(out_path_img), img_draw)
+            cv2.imwrite(str(out_path_img), frame_out)
             first_png_saved = True
         if show:
-            cv2.imshow("Render", img_draw)
+            cv2.imshow("Render", frame_out)
             key = cv2.waitKey(1)
             if key == 27:  # ESC
                 print("⏹️ Rendering aborted by user.")
                 break
-        writer.write(cv2.resize(img_draw, (width, height)))
+        writer.write(frame_out)
 
     writer.release()
     print(f"🎬 Saved: {out_path}  | 🖼️ Preview: {out_path_img}")

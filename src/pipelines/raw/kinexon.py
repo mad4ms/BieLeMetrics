@@ -7,6 +7,7 @@ No orchestration/persistence concerns should live here.
 from __future__ import annotations
 
 import logging
+from datetime import date as _date
 from typing import Optional
 
 import pandas as pd
@@ -58,11 +59,18 @@ def get_sessions_for_team(
     if end_date is None:
         end_date = pd.Timestamp("2100-01-01", tz="UTC")
 
+    # The library's _to_iso() converts datetime→string, but _get_kwargs() then
+    # calls .isoformat() on that string → AttributeError. Pass datetime.date
+    # instead: it is NOT a datetime.datetime subclass (so _to_iso skips it),
+    # but it has .isoformat() that _get_kwargs can call successfully.
+    start_d: _date = start_date.date() if hasattr(start_date, "date") else start_date
+    end_d: _date = end_date.date() if hasattr(end_date, "date") else end_date
+
     sessions = (
         api.get_sessions_for_team(
             team_id=int(team_id),
-            start=start_date,
-            end=end_date,
+            start=start_d,
+            end=end_d,
         )
         or []
     )

@@ -11,6 +11,7 @@ from dagster import (
 from src.pipelines.normalized.match_detected_shots import (
     normalize_match_detected_shots as normalize_match_detected_shots_fn,
 )
+from src.hbl_etl_dagster.utils.metadata import markdown_table
 
 fixtures_partition_def = DynamicPartitionsDefinition(name="fixture_partitions")
 
@@ -28,21 +29,12 @@ def match_detected_shots_normalized(
     """
     Normalize match detected shots.
 
-    :param context: Description
-    :type context: AssetExecutionContext
-    :param detected_events_kinexon_raw: Description
-    :type detected_events_kinexon_raw: pd.DataFrame
-    :return: Description
-    :rtype: pd.DataFrame
+    :param context: AssetExecutionContext
+    :param detected_events_kinexon_raw: Raw Kinexon detected events for the current partition.
+    :return: Normalized detected shots DataFrame.
     """
-    fixture_id = context.partition_key
-
-    df_fixture_detected_shots = detected_events_kinexon_raw[
-        detected_events_kinexon_raw["fixture_id"] == str(fixture_id)
-    ].copy()
-
     df_normalized = normalize_match_detected_shots_fn(
-        detected_events_kinexon_raw=df_fixture_detected_shots,
+        detected_events_kinexon_raw=detected_events_kinexon_raw,
     )
 
     context.log.info("Normalized %d match detected shots", len(df_normalized))
@@ -50,7 +42,7 @@ def match_detected_shots_normalized(
         {
             "n_rows": len(df_normalized),
             "n_columns": df_normalized.shape[1],
-            "preview": MetadataValue.md(df_normalized.head().to_markdown(index=False)),
+            "preview": MetadataValue.md(markdown_table(df_normalized, n=5)),
         }
     )
 

@@ -28,7 +28,7 @@ def fetch_season_id(
         season_year,
     )
     season_id = api.get_season_id_by_year(
-        competition_id=competition_id, season_year=season_year
+        competition_id=competition_id, season_year=int(season_year)
     )
 
     if season_id:
