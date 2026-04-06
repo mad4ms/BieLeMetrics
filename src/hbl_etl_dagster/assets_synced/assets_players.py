@@ -57,15 +57,18 @@ def players(
         df_match_players_normalized=match_players_normalized,
     )
     context.log.info("Extracted %d synced players", len(df_players_in_events))
+    coverage_league_id_percent = 0.0
+    if len(df_players_in_events) > 0 and "league_id" in df_players_in_events.columns:
+        coverage_league_id_percent = (
+            df_players_in_events["league_id"].nunique() / len(df_players_in_events)
+        ) * 100
+
     context.add_output_metadata(
         {
             "n_rows": len(df_players_in_events),
             "n_unique_players": df_players_in_events["person_id"].nunique(),
             "n_original_players": len(match_players_normalized),
-            "coverage_league_id_percent": (
-                df_players_in_events["league_id"].nunique() / len(df_players_in_events)
-            )
-            * 100,
+            "coverage_league_id_percent": coverage_league_id_percent,
             "n_columns": df_players_in_events.shape[1],
             "preview": MetadataValue.md(markdown_table(df_players_in_events, n=100)),
         }

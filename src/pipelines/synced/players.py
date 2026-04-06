@@ -3,10 +3,39 @@ import difflib
 import pandas as pd
 
 
+PLAYER_OUTPUT_COLUMNS = [
+    "fixture_id",
+    "entity_id",
+    "person_id",
+    "name",
+    "bib",
+    "position",
+    "team_name",
+    "team_side",
+    "date_of_birth",
+    "name_family_latin",
+    "name_family_local",
+    "name_full_latin",
+    "name_full_local",
+    "name_given_latin",
+    "name_given_local",
+    "nationality",
+    "height",
+    "weight",
+    "mapped_id",
+    "league_id",
+    "session_id",
+]
+
+
 def _normalize_match_text(value: object) -> str:
     if pd.isna(value):
         return ""
     return str(value).strip()
+
+
+def _empty_players_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=PLAYER_OUTPUT_COLUMNS)
 
 
 def extract_players_for_match(
@@ -33,16 +62,7 @@ def extract_players_for_match(
     df_match_players = df_match_players_normalized.copy()  # cols: date_of_birth	name_family_latin	name_family_local	name_full_latin	name_full_local	name_given_latin	name_given_local    nationality	person_id	height	weight	fixture_id
 
     if df_match_infos.empty:
-        return pd.DataFrame(
-            columns=[
-                "fixture_id",
-                "entity_id",
-                "person_id",
-                "name",
-                "team_name",
-                "team_side",
-            ]
-        )
+        return _empty_players_frame()
 
     # Assume df_match_infos is already filtered to this match; if not, we still handle multiple fixtures.
     # Build per-fixture maps.
@@ -63,18 +83,7 @@ def extract_players_for_match(
     team_lookup["entity_id"] = team_lookup["entity_id"].astype(str)
 
     if df_events.empty:
-        return pd.DataFrame(
-            columns=[
-                "fixture_id",
-                "entity_id",
-                "person_id",
-                "name",
-                "team_name",
-                "bib",
-                "position",
-                "team_side",
-            ]
-        )
+        return _empty_players_frame()
 
     # filter for event_type == "person"
     df_events = df_events[df_events["event_type"] == "person"]
@@ -193,5 +202,7 @@ def extract_players_for_match(
     df_players_in_events = df_players_in_events.drop_duplicates(
         subset=["fixture_id", "entity_id", "person_id"]
     ).reset_index(drop=True)
+
+    df_players_in_events = df_players_in_events.reindex(columns=PLAYER_OUTPUT_COLUMNS)
 
     return df_players_in_events
