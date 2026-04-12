@@ -81,7 +81,7 @@ matches_normalized           ← links Kinexon sessions to SR fixtures
 ### `fixture_raw_backfill_job` (partitioned by `fixture_id`)
 
 Full fixture pipeline from raw ingest through feature generation.
-Run once per fixture, or re-run from a specific asset using `debug_run.py --from <asset>`.
+Run once per fixture, or re-run from a specific asset using `scripts/debug/pipeline.py fixture <fixture_id> --from <asset>`.
 
 ```
 fixture_events_sportradar_raw   players_sportradar_raw
@@ -169,8 +169,7 @@ Key sync steps in `src/pipelines/synced/shot_events.py`:
    acceleration peak to estimate the actual release timestamp.
 5. **Goal-side inference** — assign `goal_position` from goalkeeper positions, per (team, period).
 
-See [shot-detection-analysis.md](shot-detection-analysis.md) and
-[shot-sync-drift-findings.md](shot-sync-drift-findings.md) for pitfalls and the proposed fix.
+See [shot-detection-analysis.md](shot-detection-analysis.md) for how this pipeline was developed, pitfalls, and fixes.
 
 ---
 
@@ -194,9 +193,9 @@ Dagster asset checks run alongside materialization to catch schema and integrity
 For local iteration without the Dagster UI:
 
 ```bash
-uv run python debug_run.py fixture <fixture_id>              # full fixture pipeline
-uv run python debug_run.py fixture <fixture_id> --from shot_events  # re-run from asset
-uv run python debug_run.py list-fixtures                     # list available partitions
+uv run python scripts/debug/pipeline.py fixture <fixture_id>              # full fixture pipeline
+uv run python scripts/debug/pipeline.py fixture <fixture_id> --from shot_events  # re-run from asset
+uv run python scripts/debug/ml.py evaluate                                 # evaluate trained xG model
 ```
 
 ---
@@ -204,6 +203,6 @@ uv run python debug_run.py list-fixtures                     # list available pa
 ## Related
 
 - [data-model.md](data-model.md) — DuckDB tables, schemas, relationships
-- [ml-model.md](ml-model.md) — xG model design, features, training protocol
-- [best-practices-dagster.md](best-practices-dagster.md) — how to add assets, jobs, IO managers
-- [best-practices-pipeline.md](best-practices-pipeline.md) — how to write pipeline functions
+- [xg-feature-model-guide.md](xg-feature-model-guide.md) — xG feature engineering, model training, and evaluation protocol
+- [dagster-development-guide.md](dagster-development-guide.md) — how to add assets, jobs, IO managers
+- [pipeline-development-guide.md](pipeline-development-guide.md) — how to write pipeline functions

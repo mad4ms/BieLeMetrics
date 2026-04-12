@@ -1,4 +1,18 @@
-# ML Model — xG (Expected Goals)
+# xG Feature and Model Guide
+
+## Scope
+
+Use this guide when working on the active tabular xG path:
+
+- `features_xg` feature generation
+- `ml_xg_model` training and evaluation
+- inference expectations and artifact metadata
+- feature/model coupling when upstream sync logic changes
+
+This is intentionally one document because the active xG setup is a tightly coupled
+feature-to-model workflow rather than two independent subsystems.
+
+---
 
 ## Purpose
 
@@ -87,7 +101,7 @@ Fixture-level grouped split using `StratifiedGroupKFold`:
 Training now also records grouped cross-validation metrics across fixture-level folds:
 - Up to 5 grouped folds (`StratifiedGroupKFold`) over the full `features_xg` table.
 - Metrics tracked: grouped CV AUC, log-loss, Brier, and accuracy mean/std.
-- These metrics are persisted in `_bielemetrics_training_metadata` and surfaced by `debug_run.py analyze models`.
+- These metrics are persisted in `_bielemetrics_training_metadata` and surfaced by `scripts/debug/ml.py analyze models`.
 
 This does not replace the primary held-out validation split used for early stopping and day-to-day model checks; it gives a more stable benchmark when comparing feature or hyperparameter changes.
 
@@ -147,7 +161,7 @@ Pipeline(
 
 A custom attribute `_bielemetrics_training_metadata` is attached to the pipeline object at
 training time, containing feature lists, split strategy, train/val fixture IDs, and fixture counts.
-This attribute is persisted with the model artifact and is used by `debug_run.py evaluate` to scope
+This attribute is persisted with the model artifact and is used by `scripts/debug/ml.py evaluate` to scope
 evaluation to held-out validation fixtures. It now also includes grouped cross-validation summary metrics.
 
 ## Feature Importance
@@ -161,7 +175,7 @@ For human interpretation, prefer permutation importance. The transformed gain vi
 tree-level debugging, but it can over-emphasize individual one-hot encoded category levels such as
 specific `sub_type` values.
 
-`debug_run.py evaluate` now reports the top features from permutation importance by default.
+`scripts/debug/ml.py evaluate` now reports the top features from permutation importance by default.
 
 It also reports subgroup diagnostics by:
 - `attack_type`

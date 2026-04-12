@@ -1,6 +1,21 @@
-# Best Practices: Pipeline Functions
+# Pipeline Development Guide
 
-This document covers how to write, organize, and evolve business logic in `src/pipelines/`.
+Use this guide when writing or changing business logic in `src/pipelines/`.
+
+It captures repository-specific expectations for function boundaries, DataFrame handling,
+partition awareness, and failure behavior.
+
+---
+
+## Scope
+
+This guide is for:
+
+- normalization, sync, feature, and ML helpers in `src/pipelines/`
+- function signatures and return contracts
+- schema validation, logging, and empty-result handling
+
+If you are only wiring an existing function into Dagster, read `dagster-development-guide.md`.
 
 ---
 
@@ -153,5 +168,5 @@ logger.exception("fetch_session failed for session_id=%s", session_id)  # inside
 
 ## Related
 
-- [best-practices-dagster.md](best-practices-dagster.md) — asset wrappers, IO managers, defs.py
-- [best-practices-testing.md](best-practices-testing.md) — how to test pipeline functions
+- [dagster-development-guide.md](dagster-development-guide.md) — asset wrappers, IO managers, defs.py
+- [testing-guide.md](testing-guide.md) — how to test pipeline functions

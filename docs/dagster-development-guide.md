@@ -1,7 +1,22 @@
-# Best Practices: Dagster Assets
+# Dagster Development Guide
 
-This document covers how to write assets, configure IO managers, define jobs, and
-wire everything through `defs.py` in this repository.
+Use this guide when adding or changing Dagster assets, IO-manager usage, job definitions,
+or `defs.py` wiring in this repository.
+
+It documents repository-specific conventions, not generic Dagster advice.
+
+---
+
+## Scope
+
+This guide is for:
+
+- thin asset wrappers in `src/hbl_etl_dagster/`
+- IO-manager selection and partition handling
+- asset registration in `defs.py`
+- deciding whether work belongs in a partitioned or global job
+
+If you are changing business logic in `src/pipelines/`, read `pipeline-development-guide.md` first.
 
 ---
 
@@ -177,6 +192,6 @@ uv run dagster asset list -m hbl_etl_dagster.defs | grep your_asset_name
 
 ## Related
 
-- [best-practices-pipeline.md](best-practices-pipeline.md) — pipeline function conventions
-- [best-practices-testing.md](best-practices-testing.md) — testing pipeline functions
-- [AGENTS.md](../AGENTS.md) — full IO manager reference and job definitions
+- [pipeline-development-guide.md](pipeline-development-guide.md) — pipeline function conventions
+- [testing-guide.md](testing-guide.md) — testing pipeline functions
+- [CLAUDE.md](../CLAUDE.md) — full IO manager reference and job definitions

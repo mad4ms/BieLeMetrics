@@ -31,7 +31,7 @@ Each Dagster asset materializes as one table. Table names match asset names
 | `fixture_events_sportradar_raw` | Sportradar | All game events (goals, saves, fouls, …) for a fixture |
 | `players_sportradar_raw` | Sportradar | Player roster per fixture |
 | `detected_events_kinexon_raw` | Kinexon | Shot detection events from Kinexon |
-| `positions_kinexon_raw` | Kinexon | **⚠️ NEVER DROP** — raw positional tracking (ball + all players) at ~25 Hz |
+| `positions_kinexon_raw` | Kinexon | **⚠️ NEVER DROP** — raw positional tracking (ball + all players) at 20 Hz |
 
 #### Normalized (cleaned, typed, renamed)
 
@@ -83,7 +83,7 @@ match_positions_normalized  derived from above; re-fetching requires raw data
 ```
 
 All other tables are fully derived from API responses and can be dropped and recreated by
-re-running the pipeline. See [AGENTS.md](../AGENTS.md) for the safe wipe command.
+re-running the pipeline. See [CLAUDE.md](../CLAUDE.md) for the safe wipe command.
 
 ---
 
@@ -170,5 +170,5 @@ Consumed globally by `xg_training_job`.
 ## Related
 
 - [architecture.md](architecture.md) — full data flow and job overview
-- [ml-model.md](ml-model.md) — how `features_xg` is consumed for training
+- [xg-feature-model-guide.md](xg-feature-model-guide.md) — how `features_xg` is consumed for training and inference
 - [shot-detection-analysis.md](shot-detection-analysis.md) — how `shot_events` is produced
