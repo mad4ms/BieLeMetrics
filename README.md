@@ -1,195 +1,222 @@
+# BieLeMetrics
 
-# BieLeMetrics (Bielefeld Lemgo Metrics)
+BieLeMetrics is a handball analytics pipeline for synchronizing Sportradar event data with Kinexon positional tracking, materializing normalized tables in DuckDB, engineering expected-goal features, and training xG models.
 
-BieLeMetrics is a Python-based project aimed at processing handball data from Kinexon and Sportradar sources. The project includes downloading, synchronizing, and extracting features from event data to train machine learning models, such as an expected goal model, using the MLJAR platform.
-
-This repository contains the official code implementation for the paper  [*"Expected Goals Prediction in Professional Handball using Synchronized Event and Positional Data"*](https://dl.acm.org/doi/10.1145/3606038.3616152) by the original authors.
-
+This repository is the codebase behind the paper [Expected Goals Prediction in Professional Handball using Synchronized Event and Positional Data](https://dl.acm.org/doi/10.1145/3606038.3616152).
 
 ![Demo GIF](./assets/events/videos/demo.gif)
 
+## What This Repository Does
 
-## Table of Contents
-- [BieLeMetrics (Bielefeld Lemgo Metrics)](#bielemetrics-bielefeld-lemgo-metrics)
-  - [Table of Contents](#table-of-contents)
-  - [Project Overview](#project-overview)
-  - [Features](#features)
-  - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Setup](#setup)
-  - [Usage](#usage)
-    - [Downloading Data](#downloading-data)
-    - [Processing Data](#processing-data)
-    - [Feature Extraction](#feature-extraction)
-    - [Training Machine Learning Model](#training-machine-learning-model)
-  - [Contributing](#contributing)
-  - [License](#license)
+The pipeline turns raw vendor data into analytics-ready datasets and models:
 
-## Project Overview
+- fetches season and fixture data from Sportradar and Kinexon
+- normalizes raw source payloads into stable match-level tables
+- synchronizes players, goals, detected shots, and throw timestamps across sources
+- builds xG features from shot context and tracking frames
+- trains and evaluates an expected-goal model with fixture-aware validation
 
-The goal of BieLeMetrics is to provide a seamless and automated pipeline to:
-1. **Download** data from Sportradar and Kinexon.
-2. **Process** the data by synchronizing event information between sources.
-3. **Extract** features to be used for machine learning tasks, such as training an expected goal model using MLJAR.
+Primary outputs live in DuckDB tables such as `matches_normalized`, `players`, `shot_events`, and `features_xg`, plus model artifacts under `data/models/`.
 
-## Features
+## Stack
 
-- Download game data from Sportradar and Kinexon sources.
-- Synchronized data processing to align events across different sources.
-- Feature extraction and CSV output for MLJAR-based model training.
-- Parallel processing capabilities for efficient data handling.
+- Python `>=3.12`
+- package manager / runner: [uv](https://docs.astral.sh/uv/)
+- orchestration: Dagster
+- storage: DuckDB
+- core libraries: pandas, pyarrow, scikit-learn, xgboost, shapely
 
-## Installation
+## Quick Start
 
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Required Python packages: declared in `pyproject.toml`
-
-### Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/BieLeMetrics.git
-   cd BieLeMetrics
-   ```
-
-2. Initialize:
-   ```bash
-   uv sync --no-dev
-   ```
-
-3. Configure environment variables:
-   - Create a `.env` file in the root directory and set up necessary environment variables for your Kinexon and Sportradar API keys. Behold, the needed variables are (I must emphasize that I do not have any influence on this login procedure):
-
-   ```bash
-   # Kinexon Session Endpoint
-    ENDPOINT_KINEXON_SESSION=""
-    # Kinexon Main Endpoint
-    ENDPOINT_KINEXON_MAIN=""
-    # Kinexon API Endpoint
-    ENDPOINT_KINEXON_API=""
-    # Kinexon Session Username
-    USERNAME_KINEXON_SESSION=""
-    # Kinexon Main Username
-    USERNAME_KINEXON_MAIN=""
-    # Kinexon Session Password
-    PASSWORD_KINEXON_SESSION=""
-    # Kinexon Main Password
-    PASSWORD_KINEXON_MAIN=""
-    # Kinexon API Key
-    API_KEY_KINEXON=""
-   # Sportradar API Base URL (must include http/https)
-   BASE_URL=""
-   # Sportradar Auth URL (must include http/https)
-   AUTH_URL=""
-   # Sportradar OAuth Client ID
-   CLIENT_ID=""
-   # Sportradar OAuth Client Secret
-   CLIENT_SECRET=""
-   # Sportradar Client Organization ID
-   CLIENT_ORGANIZATION_ID=""
-    # Nextcloud Storage Endpoint
-    ENDPOINT_STORAGE_NEXTCLOUD=""
-    # Nextcloud Storage Username (optional)
-    USERNAME_STORAGE_NEXTCLOUD=""
-    # Nextcloud Storage Password (optional)
-    PASSWORD_STORAGE_NEXTCLOUD=""
-    # Path inside Nextcloud for storage (optional)
-    PATH_STORAGE_IN_NEXTCLOUD=""
-    ```
-
-
-## Data Structure
-
-The project is structured into several folders:
+### 1. Clone and install
 
 ```bash
-├── assets
-│   ├── data_samples        # Sample CSVs for tests/integration checks
-│   └── events/videos       # Rendered example videos / demo assets
-├── notebooks               # Exploratory and pipeline notebooks
-└── src
-   ├── fetcher_sportradar   # API fetch helpers (functions)
-   ├── fetcher_kinexon      # API fetch helpers (functions)
-   ├── pipelines            # Raw/normalized/synced/features/ml logic
-   ├── hbl_etl_dagster      # Dagster assets/jobs/resources/defs
-   └── apps                 # App entrypoints (e.g., simulator)
+git clone https://github.com/mad4ms/BieLeMetrics.git
+cd BieLeMetrics
+uv sync --dev
 ```
 
-## Usage
+### 2. Configure environment variables
 
-### Dagster (current pipeline entrypoint)
+Create a `.env` file in the repository root.
 
-The active Dagster definitions entrypoint is:
+```bash
+# Kinexon
+ENDPOINT_KINEXON_SESSION=""
+ENDPOINT_KINEXON_MAIN=""
+ENDPOINT_KINEXON_API=""
+USERNAME_KINEXON_SESSION=""
+USERNAME_KINEXON_MAIN=""
+PASSWORD_KINEXON_SESSION=""
+PASSWORD_KINEXON_MAIN=""
+API_KEY_KINEXON=""
+
+# Sportradar
+BASE_URL=""
+AUTH_URL=""
+CLIENT_ID=""
+CLIENT_SECRET=""
+CLIENT_ORGANIZATION_ID=""
+```
+
+Integration tests and live ingestion require these credentials. Do not hardcode secrets.
+
+### 3. Verify the environment
+
+```bash
+uv run pytest test/test_pipeline_raw.py test/test_pipeline_synced.py
+```
+
+## Common Workflows
+
+### Start the Dagster UI
+
+```bash
+uv run dagster dev -m hbl_etl_dagster.defs
+```
+
+Active Dagster entrypoint:
 
 ```bash
 src/hbl_etl_dagster/defs.py
 ```
 
-Run locally with:
+### Refresh season-level data
+
+This fetches season metadata, fixtures, teams, and Kinexon sessions.
 
 ```bash
-dagster dev -m hbl_etl_dagster.defs
+uv run dagster job execute -m hbl_etl_dagster.defs -j season_raw_refresh_job
 ```
 
-### Downloading Data
+### Run one fixture pipeline
 
-Raw season-level data (competition, season, teams, fixtures, Kinexon sessions) is executed via:
+This executes raw ingestion through normalized tables, sync products, features, and ML-support outputs for a single partition.
 
 ```bash
-dagster job execute -m hbl_etl_dagster.defs -j season_raw_refresh_job
+uv run dagster job execute -m hbl_etl_dagster.defs -j fixture_raw_backfill_job --partition <fixture_id>
 ```
 
-This job populates fixture partitions that are then used for fixture-level ingestion.
+### Use the debug scripts for local iteration
 
-### Processing Data
-
-Run the fixture pipeline (raw → normalized → synced → features → ML assets) for a fixture partition:
+These are usually faster than going through the full Dagster UI.
 
 ```bash
-dagster job execute -m hbl_etl_dagster.defs -j fixture_raw_backfill_job --partition <fixture_id>
+uv run python scripts/debug/pipeline.py season
+uv run python scripts/debug/pipeline.py fixture
+uv run python scripts/debug/pipeline.py fixture <fixture_id>
+uv run python scripts/debug/pipeline.py fixture <fixture_id> --from shot_events
+uv run python scripts/debug/pipeline.py backfill --skip-season --skip-train --from shot_events --parallel 1
 ```
 
-For interactive execution and monitoring in browser, run:
+### Train and evaluate the xG model
 
 ```bash
-dagster dev -m hbl_etl_dagster.defs
+uv run python scripts/debug/ml.py train
+uv run python scripts/debug/ml.py evaluate
+uv run python scripts/debug/ml.py analyze models
+uv run python scripts/debug/ml.py analyze features
 ```
 
+## Repository Layout
 
-### Direct Python modules (advanced)
+```text
+assets/                  Sample CSVs, demo media, and supporting assets
+data/                    DuckDB database and model artifacts
+docs/                    Architecture, data model, ML notes, and investigations
+notebooks/               Exploratory notebooks and QA views
+scripts/                 Debug, diagnostics, and one-off operational scripts
+src/
+   fetcher_kinexon/       Kinexon API fetch helpers
+   fetcher_sportradar/    Sportradar API fetch helpers
+   pipelines/             Business logic
+      raw/                 Raw ingestion helpers
+      normalized/          Source normalization
+      synced/              Cross-source synchronization
+      features/            Feature engineering
+      ml/                  Training, inference, importance analysis
+   hbl_etl_dagster/       Thin Dagster asset wrappers, io managers, defs
+test/                    Unit and integration tests
+```
 
-Fetcher files under `src/fetcher_sportradar/` and `src/fetcher_kinexon/` are importable function modules and generally are not standalone CLI scripts.
+## Data Model
 
-### Feature Extraction
-
-Feature extraction is part of `fixture_raw_backfill_job` via the Dagster assets in:
+All materialized pipeline outputs are stored in:
 
 ```bash
-src/hbl_etl_dagster/assets_features/
+data/hbl_raw.duckdb
 ```
 
-### Training Machine Learning Model
+Important table families:
 
-Model training/inference assets are executed within the same fixture backfill job (assets in `src/hbl_etl_dagster/assets_ml/`).
+- raw ingestion tables: vendor-near payloads and tracking frames
+- normalized tables: cleaned match-level entities such as `match_events_normalized` and `match_positions_normalized`
+- synced tables: fusion outputs such as `players` and `shot_events`
+- feature tables: model inputs such as `features_xg`
 
-If you want to run only the Python pipeline functions directly, use modules under:
+See [docs/data-model.md](docs/data-model.md) for the detailed schema reference.
+
+### Critical data safety note
+
+Do not drop these tables unless you explicitly intend to destroy expensive tracking data:
+
+- `positions_kinexon_raw`
+- `match_positions_normalized`
+
+They are large and expensive to rebuild.
+
+## Development Commands
+
+### Tests
 
 ```bash
-src/pipelines/ml/
+uv run pytest test/
+uv run pytest test/test_pipeline_raw.py test/test_pipeline_synced.py
+uv run pytest test/integration/
 ```
+
+### Lint and types
+
+```bash
+uv run ruff check src/ test/
+uv run ruff format src/ test/
+uv run mypy src/
+uv run pre-commit run --all-files
+```
+
+## Project Conventions
+
+- Business logic belongs in `src/pipelines/`
+- Dagster asset files should stay thin and delegate into pipeline functions
+- Tests should target pipeline logic first, not Dagster wrappers
+- Fixture-scoped data is partitioned by `fixture_id`
+- Model evaluation should stay fixture-aware to avoid leakage across train and validation
+
+## Documentation
+
+Use the docs folder for deeper reference material:
+
+- [docs/architecture.md](docs/architecture.md) — end-to-end architecture and job layout
+- [docs/data-model.md](docs/data-model.md) — tables, identifiers, and partitioning
+- [docs/pipeline-development-guide.md](docs/pipeline-development-guide.md) — writing pipeline logic in `src/pipelines/`
+- [docs/dagster-development-guide.md](docs/dagster-development-guide.md) — asset wiring, IO managers, and jobs
+- [docs/testing-guide.md](docs/testing-guide.md) — unit and integration test conventions
+- [docs/xg-feature-model-guide.md](docs/xg-feature-model-guide.md) — xG features, training, evaluation, and limitations
+- [docs/shot-detection-analysis.md](docs/shot-detection-analysis.md) — shot sync heuristics and pitfalls
+- [docs/transformers.md](docs/transformers.md) — planned spatiotemporal model direction
+
+## Current xG Workflow
+
+The active xG setup is a single global model trained on `features_xg` with fixture-aware validation. If feature generation or upstream shot synchronization changes, rebuild affected fixture partitions and retrain before trusting evaluation metrics.
 
 ## Contributing
 
-If you'd like to contribute to BieLeMetrics:
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/my-feature`).
-3. Commit your changes (`git commit -am 'Add my feature'`).
-4. Push to the branch (`git push origin feature/my-feature`).
-5. Create a new Pull Request.
+1. Create a branch from `main`
+2. Make the smallest architecture-consistent change that solves the problem
+3. Add or update focused tests
+4. Run targeted validation before broader checks
+5. Open a pull request with a clear problem statement, change summary, and validation notes
 
 ## License
 
-This project is licensed under the MIT License.
+MIT. See [LICENSE](LICENSE).

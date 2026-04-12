@@ -369,7 +369,7 @@ def _sync_goals_to_detected_shots(
                         "detected_events_shot_time": pd.to_datetime(
                             int(cand["timestamp_ms"]), unit="ms", utc=True
                         ),
-                        "time_difference_ms": time_diff_ms,
+                        "time_difference_ms": int(g_ms) - int(cand["timestamp_ms"]),
                         "effective_time_difference_ms": effective_time_diff_ms,
                         "is_player_match": is_player_match,
                         "distance": cand.get("distance"),

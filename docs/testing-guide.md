@@ -1,6 +1,22 @@
-# Best Practices: Testing
+# Testing Guide
 
-This document covers how to write, organize, and run tests for `src/pipelines/` functions.
+Use this guide when adding or updating tests for repository code.
+
+It focuses on the project's expected split between fast pipeline tests and credentialed
+integration checks.
+
+---
+
+## Scope
+
+This guide is for:
+
+- unit tests for `src/pipelines/`
+- regression tests for pipeline bugs
+- sample-data-based tests under `assets/data_samples/`
+- integration tests that depend on `.env` credentials
+
+It is not a guide for Dagster asset test harnesses; those should remain the exception here.
 
 ---
 
@@ -152,5 +168,5 @@ def test_sync_does_not_assign_same_detected_shot_to_multiple_goals():
 
 ## Related
 
-- [best-practices-pipeline.md](best-practices-pipeline.md) — writing pipeline functions
-- [AGENTS.md](../AGENTS.md) — full test command reference and policy
+- [pipeline-development-guide.md](pipeline-development-guide.md) — writing pipeline functions
+- [CLAUDE.md](../CLAUDE.md) — full test command reference and policy

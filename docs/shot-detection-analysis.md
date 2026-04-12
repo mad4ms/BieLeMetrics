@@ -15,11 +15,19 @@ This note reviews the active goal-to-shot sync pipeline in `src/pipelines/synced
 
 ## Matching Heuristics
 
-- Goal-to-shot matching uses a fixed asymmetric window of `-30_000 ms` to `+3_000 ms` around the Sportradar goal time.
+- Goal-to-shot matching uses a symmetric bootstrap window of `±35_000 ms` around the Sportradar goal time (`_BOOTSTRAP_TOL_MS = 35_000`). When clock drift correction is active (≥ 5 `player_time` pairs, residual std ≤ 5 000 ms), pass 2 uses an auto-computed tight window centered on the predicted Kinexon timestamp instead of the wide fallback.
 - Preferred match: same `person_league_id` and closest time, unless another detected shot is materially closer to the predicted Kinexon timestamp. Such overrides are marked as `match_method = "time_priority_override"`.
 - Fallback match: closest time only, `match_method = "time_only_fallback"`.
 - Matching is one-to-one on both `goal_event_id` and `detected_shot_id` (both deduplicated, smallest time_diff wins).
 - Throw-point detection uses possession defined as `dist_pb <= 1.5` and chooses the max `ball_acc` within ±50 ms of the **last** possession-end in the window.
+
+
+### Timing interpretation
+
+- The wide asymmetric search window exists to tolerate fixture-level wall-clock drift between Sportradar and Kinexon.
+- In problematic fixtures, the temporally best Kinexon shot can be much closer than the same-player shot; this is why `time_priority_override` exists.
+- `time_difference_ms` in the synced output is the signed raw difference `SR_event_time_ms − KX_timestamp_ms` (positive = SR event is later than KX shot, as expected for well-synced fixtures). This is consistent regardless of whether drift correction was applied.
+- Per-fixture diagnostics still matter: large fallback share, large residuals, or many overrides usually indicate timing or player-identity issues rather than random noise.
 
 ---
 
@@ -27,10 +35,9 @@ This note reviews the active goal-to-shot sync pipeline in `src/pipelines/synced
 
 ### 1. The time window is wide enough to hide bad alignment *(monitoring only)*
 
-- A 30-second lookback can attach an earlier possession or even an earlier shot in dense phases.
+- A 35-second bootstrap window can attach an earlier possession or even an earlier shot in dense phases.
 - This is especially risky when the code falls back to `time_only_fallback`.
-- **Mitigation:** `sync_shot_events` logs a warning when any goal's `time_difference_ms` exceeds 5 000 ms.
-- No hard limit is enforced; operator review is still required.
+- No hard limit is enforced; operator review via `scripts/analyze_goal_event_timing.py` is required.
 
 ### 2. ~~Matching is not one-to-one on detected shots~~ **FIXED**
 
@@ -87,9 +94,14 @@ This note reviews the active goal-to-shot sync pipeline in `src/pipelines/synced
 - The `time_only_fallback` rate is not surfaced as a Dagster asset metadata field (operator must inspect logs).
 - `debug_shot.py` provides an interactive per-fixture diagnostic report.
 
+## What belongs here vs. timing analysis
+
+- This document should stay focused on active pipeline behavior, failure modes, and operational checks.
+- Historical per-fixture drift exploration does not need its own top-level document unless it introduces a still-active algorithm or operator workflow.
+
 ## Highest-Risk Failure Modes
 
-1. Whole fixtures appear "matched" even when the underlying clocks are off by tens of seconds — detectable via the `time_difference_ms > 5 000 ms` warning.
+1. Whole fixtures appear "matched" even when the underlying clocks are off by tens of seconds — detectable via `scripts/analyze_goal_event_timing.py` (large median or p95 `time_difference_ms`).
 2. Missing or incorrect player mapping drives the system into `time_only_fallback` — mitigated by team-constrained fuzzy matching.
 3. Throw timestamps are missing because ball and player timestamps rarely align exactly — **not an issue**; Kinexon uses a shared clock so alignment is guaranteed.
 4. Rebounds or clustered shot sequences map to the wrong detected shot — mitigated by one-to-one `detected_shot_id` deduplication.
@@ -99,14 +111,9 @@ This note reviews the active goal-to-shot sync pipeline in `src/pipelines/synced
 | Check | Status |
 |---|---|
 | Track `match_method = "time_only_fallback"` rate | Logged; not surfaced as Dagster metadata |
-| Flag large median / p95 `time_difference_ms` | Warning at >5 000 ms |
+| Flag large median / p95 `time_difference_ms` | Via `analyze_goal_event_timing.py`; no in-code gate |
 | Enforce one-to-one `detected_shot_id` matching | **Done** |
 | Nearest-within-50ms join for throw refinement | N/A — same clock, exact join is correct |
 | Validation report for missing `person_league_id`, `goal_position`, `throw_timestamp_ms` | Available via `debug_shot.py` |
 
 ---
-
-## Related
-
-- [timing-async-analysis.md](timing-async-analysis.md) — root cause of Kinexon/Sportradar clock offset
-- [shot-sync-drift-findings.md](shot-sync-drift-findings.md) — per-fixture drift investigation and fix proposal
