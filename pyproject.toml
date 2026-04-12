@@ -83,5 +83,5 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
-    "nbconvert>=7.17.0",
+    "nbconvert>=7.17.1",
 ]
