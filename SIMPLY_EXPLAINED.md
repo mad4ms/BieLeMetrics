@@ -81,7 +81,7 @@ xG trennt deshalb:
 
 ## Einfache Beispiele
 
-### Freier Wurf nach Tempogegenstoss
+### Freier Wurf im Tempogegenstoss
 
 - nah am Tor
 - wenig Druck
@@ -89,7 +89,7 @@ xG trennt deshalb:
 
 Typisch: **hoher xG-Wert**
 
-### Wurf vom Fluegel
+### Wuerfe von der Aussenposition
 
 - nah am Tor
 - wenig Druck
@@ -97,7 +97,7 @@ Typisch: **hoher xG-Wert**
 
 Typisch: **mittlerer xG-Wert**
 
-### Rueckraumwurf unter Druck
+### Wuerfe aus dem Rueckraum unter Druck
 
 - groessere Distanz
 - moeglicher Blockdruck
