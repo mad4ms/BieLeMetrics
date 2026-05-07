@@ -2,7 +2,7 @@
 
 ## Kurzfassung
 
-xG bedeutet **Expected Goals**, also **erwartete Tore**.
+Definition: xG oder **Expected Goals** bedeutet also **erwartete Tore**. Das xG-Modell bietet einen wahrscheinlichkeitsbasierten Ansatz zum Verständnis von Torchancen in einem Spiel und zielt darauf ab, die Qualität eines Wurfs anhand mehrerer spielbezogener Variablen zu bewerten.
 
 Die Grundidee ist einfach:
 
@@ -46,7 +46,7 @@ Das Bild zeigt also anschaulich den Kern von xG:
 
 ## Warum braucht man xG?
 
-Ohne xG schaut man oft nur auf einfache Zahlen wie:
+Ohne xG schaut man oft nur auf einfache Statistiken die uns erklären WAS passiert ist:
 
 - Tore
 - Fehlwuerfe
@@ -54,17 +54,22 @@ Ohne xG schaut man oft nur auf einfache Zahlen wie:
 - Paraden
 - Anzahl der Abschluesse
 
-Diese Zahlen sind nuetzlich, aber sie beantworten oft nicht die wichtigste Frage:
+![Spielsituation im Kontext](assets/kontext_1.png)
 
-**Wie gut waren die Chancen wirklich?**
+Diese Zahlen sind nuetzlich, aber sie beantworten oft nicht die wichtigsten Fragen:
+
+**Warum sind Tore/Spielstand/Spielsituationen zu Stande gekommen?**
+**Wie gut waren die Torchancen wirklich?**
 
 Zwei Teams koennen beide 30-mal werfen:
 
 - Team A kommt oft frei aus guter Position zum Abschluss.
-- Team B muss viele schwere Wuerfe unter Druck nehmen.
+- Team B muss viele schwere Wuerfe unter Drucksituationen nehmen.
 
 Beide Teams haben gleich viele Wuerfe.
-Aber die **Qualitaet** dieser Wuerfe ist sehr verschieden.
+Aber die **Qualitaet** dieser herausgespielten Wuerfe ist sehr verschieden.
+
+![Qualität von torchancen](assets/qualitaet.png)
 
 xG trennt deshalb:
 
@@ -80,22 +85,23 @@ xG trennt deshalb:
 
 - nah am Tor
 - wenig Druck
-- klarer Abschluss
+- großer Winkel
 
 Typisch: **hoher xG-Wert**
 
 ### Wurf vom Fluegel
 
 - nah am Tor
-- aber oft enger Winkel
+- wenig Druck
+- aber oft kleiner Winkel
 
 Typisch: **mittlerer xG-Wert**
 
 ### Rueckraumwurf unter Druck
 
 - groessere Distanz
-- schlechtere Position
 - moeglicher Blockdruck
+- unterschiedliche Winkelgröße
 
 Typisch: **niedriger xG-Wert**
 
@@ -108,13 +114,13 @@ xG ist **nicht**:
 - keine sichere Vorhersage fuer den naechsten Wurf
 - keine perfekte Wahrheit
 - kein Ersatz fuer Videoanalyse
-- keine Ausrede nach Niederlagen
+- keine Ausrede nach Niederlagen (oder vielleicht doch?)
 
 xG ist:
 
 - ein Modell fuer **Chancequalitaet**
 - ein **Kontextwerkzeug** fuer Wuerfe und Paraden
-- eine Hilfe, Leistung fairer einzuordnen
+- eine Hilfe, Leistungen fairer einzuordnen
 
 ---
 
