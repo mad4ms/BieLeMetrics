@@ -145,4 +145,4 @@ Gerade im Handball ist xG daher vor allem ein Werkzeug fuer die Frage:
 
 ## Die wichtigste Denkweise in einem Satz
 
-> **Tore sagen, was passiert ist. xG hilft zu verstehen, wie wahrscheinlich es war.**
+> **Tore sagen, was passiert ist. xG hilft zu verstehen, warum etwas passiert.**
